@@ -1119,7 +1119,7 @@ const StoreProductsPage: React.FC = () => {
                               )}
                             </div>
                             <div className="flex items-center gap-2">
-                              <Button
+                              {/* <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-9 w-9 rounded-full hover:bg-red-50 hover:text-red-500"
@@ -1129,7 +1129,7 @@ const StoreProductsPage: React.FC = () => {
                                 }}
                               >
                                 <Heart className="h-4 w-4" />
-                              </Button>
+                              </Button> */}
                               <Button
                                 size="sm"
                                 className="rounded-full px-5"

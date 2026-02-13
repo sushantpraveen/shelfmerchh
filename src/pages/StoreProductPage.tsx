@@ -6,6 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ProductDescription } from "@/components/ProductDescription";
+import { KeyFeatures } from "@/components/KeyFeatures";
+import { CareInstructions } from "@/components/CareInstructions";
+import { storeApi, storeProductsApi, productApi } from '@/lib/api';
 import {
   Star,
   ShoppingCart,
@@ -29,7 +33,6 @@ import {
   Menu
 } from 'lucide-react';
 import { Product, Store, CartItem } from '@/types';
-import { storeApi, storeProductsApi } from '@/lib/api';
 import { getTheme } from '@/lib/themes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStoreAuth } from '@/contexts/StoreAuthContext';
@@ -375,6 +378,9 @@ const StoreProductPage = () => {
             })(),
             designs: sp.designData?.designs || {},
             designBoundaries: sp.designData?.designBoundaries,
+            categoryId: sp.categoryId || sp.catalogProduct?.categoryId || (typeof sp.catalogProductId === 'object' ? (sp.catalogProductId as any).categoryId : undefined),
+            subcategoryIds: sp.subcategoryIds || sp.catalogProduct?.subcategoryIds || (typeof sp.catalogProductId === 'object' ? (sp.catalogProductId as any).subcategoryIds : []),
+            catalogProduct: sp.catalogProduct || (typeof sp.catalogProductId === 'object' ? sp.catalogProductId : undefined),
             variants: {
               colors: colors.length ? colors : ['Default'],
               sizes: sizes.length ? sizes : ['One Size'],
@@ -383,6 +389,7 @@ const StoreProductPage = () => {
             updatedAt: sp.updatedAt || new Date().toISOString(),
           };
 
+          // Set initial product from store product data immediately to ensure fast UI response
           setProduct(currentProduct);
           setVariantPriceMap(priceMap);
 
@@ -394,6 +401,44 @@ const StoreProductPage = () => {
           setActiveImageIndex(0);
           setSelectedColor(currentProduct.variants.colors[0] || 'Default');
           setSelectedSize(currentProduct.variants.sizes[0] || 'One Size');
+
+          // Fetch full catalog product data in the background if available
+          const baseProductId = typeof sp.catalogProductId === 'string'
+            ? sp.catalogProductId
+            : sp.catalogProductId?._id || sp.catalogProductId?.id;
+
+          if (baseProductId) {
+            productApi.getById(baseProductId).then(catResp => {
+              if (catResp && catResp.success && catResp.data) {
+                const catData = catResp.data;
+                setProduct(prev => {
+                  if (!prev) return prev;
+                  // Only update if it's the same product
+                  if (prev.id !== currentProduct.id) return prev;
+
+                  const updatedCatalogProduct = {
+                    ...prev.catalogProduct,
+                    attributes: catData.catalogue?.attributes || catData.attributes,
+                    categoryId: catData.catalogue?.categoryId || catData.categoryId,
+                    subcategoryIds: catData.catalogue?.subcategoryIds || catData.subcategoryIds,
+                    description: catData.catalogue?.description || catData.description,
+                    name: catData.catalogue?.name || catData.name,
+                  };
+
+                  return {
+                    ...prev,
+                    catalogProduct: updatedCatalogProduct,
+                    categoryId: prev.categoryId || updatedCatalogProduct.categoryId,
+                    subcategoryIds: (prev.subcategoryIds && prev.subcategoryIds.length > 0)
+                      ? prev.subcategoryIds
+                      : updatedCatalogProduct.subcategoryIds
+                  };
+                });
+              }
+            }).catch(catErr => {
+              console.error('Background fetch of catalog product details failed:', catErr);
+            });
+          }
         } catch (err) {
           console.error('Failed to load public store product with variants:', err);
           setProduct(null);
@@ -717,51 +762,52 @@ const StoreProductPage = () => {
 
   // Render main product details content (Image Gallery + Info + Tabs)
   const renderProductDetails = () => (
-    <div className="grid gap-8 lg:gap-12 lg:grid-cols-2 mb-16">
-      {/* Image Gallery */}
-      <div className="space-y-4">
-        {/* Main Image */}
-        <div className="relative aspect-square bg-gradient-to-br from-muted/50 to-muted rounded-2xl border overflow-hidden group">
-          {galleryImages.length > 0 ? (
-            <>
-              <ImageMagnifier src={galleryImages[activeImageIndex] || galleryImages[0]} alt={product.name} />
+    <>
+      <div className="grid gap-8 lg:gap-12 lg:grid-cols-2 mb-16">
+        {/* Image Gallery */}
+        <div className="space-y-4">
+          {/* Main Image */}
+          <div className="relative aspect-square bg-gradient-to-br from-muted/50 to-muted rounded-2xl border overflow-hidden group">
+            {galleryImages.length > 0 ? (
+              <>
+                <ImageMagnifier src={galleryImages[activeImageIndex] || galleryImages[0]} alt={product.name} />
 
-              {/* Navigation Arrows */}
-              {galleryImages.length > 1 && (
-                <>
-                  <button
-                    onClick={prevImage}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 bg-background/90 backdrop-blur-sm rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-background hover:scale-105 border"
-                    aria-label="Previous image"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={nextImage}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-background/90 backdrop-blur-sm rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-background hover:scale-105 border"
-                    aria-label="Next image"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </>
-              )}
-
-              {/* Badges */}
-              <div className="absolute top-4 left-4 flex flex-col gap-2">
-                {discountPercentage > 0 && (
-                  <Badge className="bg-destructive text-destructive-foreground shadow-lg">
-                    -{discountPercentage}% OFF
-                  </Badge>
+                {/* Navigation Arrows */}
+                {galleryImages.length > 1 && (
+                  <>
+                    <button
+                      onClick={prevImage}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 bg-background/90 backdrop-blur-sm rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-background hover:scale-105 border"
+                      aria-label="Previous image"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={nextImage}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-background/90 backdrop-blur-sm rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-background hover:scale-105 border"
+                      aria-label="Next image"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
                 )}
-                <Badge variant="secondary" className="bg-primary/10 text-primary backdrop-blur-sm shadow-lg">
-                  <Zap className="w-3 h-3 mr-1" />
-                  Bestseller
-                </Badge>
-              </div>
 
-              {/* Actions */}
-              <div className="absolute top-4 right-4 flex flex-col gap-2">
-                <button
+                {/* Badges */}
+                <div className="absolute top-4 left-4 flex flex-col gap-2">
+                  {discountPercentage > 0 && (
+                    <Badge className="bg-destructive text-destructive-foreground shadow-lg">
+                      -{discountPercentage}% OFF
+                    </Badge>
+                  )}
+                  <Badge variant="secondary" className="bg-primary/10 text-primary backdrop-blur-sm shadow-lg">
+                    <Zap className="w-3 h-3 mr-1" />
+                    Bestseller
+                  </Badge>
+                </div>
+
+                {/* Actions */}
+                <div className="absolute top-4 right-4 flex flex-col gap-2">
+                  {/* <button
                   onClick={() => setIsWishlisted(!isWishlisted)}
                   className={cn(
                     "p-2.5 rounded-full shadow-lg transition-all hover:scale-105 border",
@@ -772,64 +818,64 @@ const StoreProductPage = () => {
                   aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
                 >
                   <Heart className={cn("w-5 h-5", isWishlisted && 'fill-current')} />
-                </button>
-                <button
-                  onClick={handleShare}
-                  className="p-2.5 bg-background/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-background transition-all hover:scale-105 border"
-                  aria-label="Share product"
-                >
-                  <Share2 className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Image Counter */}
-              {galleryImages.length > 1 && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-background/90 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium shadow-lg border">
-                  {activeImageIndex + 1} / {galleryImages.length}
+                </button> */}
+                  <button
+                    onClick={handleShare}
+                    className="p-2.5 bg-background/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-background transition-all hover:scale-105 border"
+                    aria-label="Share product"
+                  >
+                    <Share2 className="w-5 h-5" />
+                  </button>
                 </div>
-              )}
-            </>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Package className="w-24 h-24 text-muted-foreground/30" />
+
+                {/* Image Counter */}
+                {galleryImages.length > 1 && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-background/90 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium shadow-lg border">
+                    {activeImageIndex + 1} / {galleryImages.length}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Package className="w-24 h-24 text-muted-foreground/30" />
+              </div>
+            )}
+          </div>
+
+          {/* Thumbnails */}
+          {galleryImages.length > 1 && (
+            <div className="grid grid-cols-5 gap-2">
+              {galleryImages.map((image, index) => (
+                <button
+                  key={`thumb-${index}`}
+                  onClick={() => setActiveImageIndex(index)}
+                  className={cn(
+                    "relative aspect-square rounded-lg overflow-hidden border-2 transition-all",
+                    activeImageIndex === index
+                      ? 'border-primary ring-2 ring-primary/20'
+                      : 'border-border hover:border-primary/50'
+                  )}
+                >
+                  <img
+                    src={image}
+                    alt={`${product.name} view ${index + 1}`}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  {activeImageIndex === index && (
+                    <div className="absolute inset-0 bg-primary/10" />
+                  )}
+                </button>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Thumbnails */}
-        {galleryImages.length > 1 && (
-          <div className="grid grid-cols-5 gap-2">
-            {galleryImages.map((image, index) => (
-              <button
-                key={`thumb-${index}`}
-                onClick={() => setActiveImageIndex(index)}
-                className={cn(
-                  "relative aspect-square rounded-lg overflow-hidden border-2 transition-all",
-                  activeImageIndex === index
-                    ? 'border-primary ring-2 ring-primary/20'
-                    : 'border-border hover:border-primary/50'
-                )}
-              >
-                <img
-                  src={image}
-                  alt={`${product.name} view ${index + 1}`}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                {activeImageIndex === index && (
-                  <div className="absolute inset-0 bg-primary/10" />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Product Info */}
-      <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-        {/* Header */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
+        {/* Product Info */}
+        <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+          {/* Header */}
+          <div className="space-y-3">
+            {/* <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1">
               {[1, 2, 3, 4, 5].map((star) => (
                 <Star
@@ -842,213 +888,297 @@ const StoreProductPage = () => {
               ))}
             </div>
             <span className="text-sm text-muted-foreground">4.8 (128 reviews)</span>
+          </div> */}
+
+            <h1
+              className="text-3xl lg:text-4xl font-bold tracking-tight"
+              style={{ fontFamily: theme.fonts.heading }}
+            >
+              {product.name}
+            </h1>
+
+            {product.description && (
+              <p className="text-muted-foreground leading-relaxed">
+                {product.description}
+              </p>
+            )}
           </div>
 
-          <h1
-            className="text-3xl lg:text-4xl font-bold tracking-tight"
-            style={{ fontFamily: theme.fonts.heading }}
-          >
-            {product.name}
-          </h1>
-
-          {product.description && (
-            <p className="text-muted-foreground leading-relaxed">
-              {product.description}
-            </p>
-          )}
-        </div>
-
-        {/* Price */}
-        <div className="flex items-baseline gap-3">
-          <span
-            className="text-3xl font-bold"
-            style={{ color: theme.colors.primary }}
-          >
-            ₹{effectivePrice.toFixed(2)}
-          </span>
-          {product.compareAtPrice && product.compareAtPrice > effectivePrice && (
-            <>
-              <span className="text-xl text-muted-foreground line-through">
-                ₹{product.compareAtPrice.toFixed(2)}
-              </span>
-              <Badge variant="destructive" className="font-semibold">
-                Save ₹{(product.compareAtPrice - effectivePrice).toFixed(2)}
-              </Badge>
-            </>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Variants */}
-        <div className="space-y-5">
-          {/* Color Selection */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold">Color</label>
-              <span className="text-sm text-muted-foreground">{selectedColor}</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {availableColors.map((color) => {
-                const hex = getColorHex(color);
-                const isSelected = selectedColor === color;
-                // Check if this color has any available sizes
-                const hasSizes = colorToSizesMap[color]?.size > 0;
-
-                return (
-                  <button
-                    key={color}
-                    onClick={() => {
-                      if (hasSizes) {
-                        setSelectedColor(color);
-                      }
-                    }}
-                    disabled={!hasSizes}
-                    className={cn(
-                      "relative w-10 h-10 rounded-full border-2 transition-all",
-                      !hasSizes
-                        ? 'opacity-40 cursor-not-allowed grayscale'
-                        : isSelected
-                          ? 'border-primary ring-2 ring-primary/30 hover:scale-110'
-                          : 'border-border hover:border-primary/50 hover:scale-110'
-                    )}
-                    style={{ backgroundColor: hex }}
-                    title={!hasSizes ? `${color} - No sizes available` : color}
-                    aria-label={!hasSizes ? `${color} color (no sizes available)` : `Select ${color} color`}
-                  >
-                    {isSelected && (
-                      <Check
-                        className={cn(
-                          "w-5 h-5 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-                          ["White", "Cream", "Beige", "Yellow"].includes(color) ? "text-black" : "text-white"
-                        )}
-                        strokeWidth={3}
-                      />
-                    )}
-                    {!hasSizes && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xs text-muted-foreground">×</span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+          {/* Price */}
+          <div className="flex items-baseline gap-3">
+            <span
+              className="text-3xl font-bold"
+              style={{ color: theme.colors.primary }}
+            >
+              ₹{effectivePrice.toFixed(2)}
+            </span>
+            {product.compareAtPrice && product.compareAtPrice > effectivePrice && (
+              <>
+                <span className="text-xl text-muted-foreground line-through">
+                  ₹{product.compareAtPrice.toFixed(2)}
+                </span>
+                <Badge variant="destructive" className="font-semibold">
+                  Save ₹{(product.compareAtPrice - effectivePrice).toFixed(2)}
+                </Badge>
+              </>
+            )}
           </div>
 
-          {/* Size Selection */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold">Size</label>
-              <button
-                className="text-sm text-primary hover:underline flex items-center gap-1"
-                onClick={() => {
-                  /* Logic to open size chart modal could go here */
-                }}
-              >
-                Size Guide
-                <ChevronDown className="w-3 h-3" />
-              </button>
+          {/* Product Features, same as products page - Dynamic from attributes */}
+          {/* {product.catalogProduct?.attributes && (
+            <div className="space-y-2.5">
+              {Object.entries(product.catalogProduct.attributes)
+                .filter(([_, value]) => value && value !== '')
+                .slice(0, 7)
+                .map(([key, value]) => {
+                  const formatLabel = (key: string, value: any) => {
+                    const formatters: Record<string, (val: any) => string> = {
+                      'gender': (val) => `For ${val}`,
+                      'gsm': (val) => `${val} GSM`,
+                      'fit': (val) => `${val} fit`,
+                      'brand': (val) => `Brand: ${val}`,
+                      'collarType': (val) => `${val} collar`,
+                      'hoodType': (val) => `${val} hood`,
+                      'pocketStyle': (val) => `${val} pockets`,
+                      'neckline': (val) => `${val} neckline`,
+                      'capacity': (val) => `Capacity: ${val}`,
+                      'dishwasherSafe': (val) => `Dishwasher ${val === 'Yes' ? '✓' : '✗'}`,
+                      'microwaveSafe': (val) => `Microwave ${val === 'Yes' ? '✓' : '✗'}`,
+                      'dimensions': (val) => `Size: ${val}`,
+                      'fillMaterial': (val) => `Filled with ${val}`,
+                      'frameSize': (val) => `${val} frame`,
+                      'frameMaterial': (val) => `${val} frame`,
+                      'paperType': (val) => `${val} paper`,
+                      'paperWeight': (val) => `${val} paper`,
+                      'finish': (val) => `${val} finish`,
+                      'corners': (val) => `${val} corners`,
+                      'size': (val) => `Size: ${val}`,
+                      'stickerType': (val) => `${val} sticker`,
+                      'waterproof': (val) => val === 'Yes' ? 'Waterproof' : 'Not waterproof',
+                      'pageCount': (val) => `${val} pages`,
+                      'binding': (val) => `${val} binding`,
+                      'ruling': (val) => `${val} pages`,
+                      'recyclable': (val) => val === 'Yes' ? 'Recyclable' : val === 'Partially' ? 'Partially recyclable' : 'Not recyclable',
+                      'boxType': (val) => `${val} box`,
+                      'capType': (val) => `${val} cap`,
+                      'pouchType': (val) => `${val} pouch`,
+                      'model': (val) => `Model: ${val}`,
+                      'protection': (val) => `${val} protection`,
+                      'hypoallergenic': (val) => val === 'Yes' ? 'Hypoallergenic' : 'Contains allergens',
+                      'ringSize': (val) => `Size: ${val}`,
+                      'bandWidth': (val) => `${val} band`,
+                      'chainLength': (val) => `${val} chain`,
+                      'chainType': (val) => `${val} chain`,
+                      'claspType': (val) => `${val} clasp`,
+                      'earringType': (val) => `${val} style`,
+                      'backingType': (val) => `${val} backing`,
+                    };
+
+                    return formatters[key]
+                      ? formatters[key](value)
+                      : `${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}: ${value}`;
+                  };
+
+                  return (
+                    <div key={key} className="flex items-center gap-2.5">
+                      <Check className="w-5 h-5 text-primary flex-shrink-0" />
+                      <span className="text-sm">{formatLabel(key, value)}</span>
+                    </div>
+                  );
+                })
+              }
             </div>
-            {availableSizes.length > 0 ? (
+          )} */}
+
+          <Separator />
+
+          {/* Variants */}
+          <div className="space-y-5">
+            {/* Color Selection */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold">Color</label>
+                <span className="text-sm text-muted-foreground">{selectedColor}</span>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {availableSizes.map((size) => {
-                  const isSelected = selectedSize === size;
+                {availableColors.map((color) => {
+                  const hex = getColorHex(color);
+                  const isSelected = selectedColor === color;
+                  // Check if this color has any available sizes
+                  const hasSizes = colorToSizesMap[color]?.size > 0;
+
                   return (
                     <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
+                      key={color}
+                      onClick={() => {
+                        if (hasSizes) {
+                          setSelectedColor(color);
+                        }
+                      }}
+                      disabled={!hasSizes}
                       className={cn(
-                        "min-w-[3rem] px-3 py-2 rounded-md border text-sm font-medium transition-all",
-                        isSelected
-                          ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                          : "border-border hover:border-primary/50 hover:bg-accent"
+                        "relative w-10 h-10 rounded-full border-2 transition-all",
+                        !hasSizes
+                          ? 'opacity-40 cursor-not-allowed grayscale'
+                          : isSelected
+                            ? 'border-primary ring-2 ring-primary/30 hover:scale-110'
+                            : 'border-border hover:border-primary/50 hover:scale-110'
                       )}
-                      title={size}
-                      aria-label={`Select ${size} size`}
+                      style={{ backgroundColor: hex }}
+                      title={!hasSizes ? `${color} - No sizes available` : color}
+                      aria-label={!hasSizes ? `${color} color (no sizes available)` : `Select ${color} color`}
                     >
-                      {size}
+                      {isSelected && (
+                        <Check
+                          className={cn(
+                            "w-5 h-5 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+                            ["White", "Cream", "Beige", "Yellow"].includes(color) ? "text-black" : "text-white"
+                          )}
+                          strokeWidth={3}
+                        />
+                      )}
+                      {!hasSizes && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs text-muted-foreground">×</span>
+                        </div>
+                      )}
                     </button>
                   );
                 })}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">
-                {selectedColor
-                  ? `No sizes available for ${selectedColor}`
-                  : 'No sizes available'}
-              </p>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Quantity & Add to Cart */}
-        <div className="space-y-4 pt-4">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold">Quantity</label>
-            <div className="flex items-center border rounded-md">
-              <button
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="p-2 hover:bg-accent hover:text-accent-foreground transition-colors"
-                disabled={quantity <= 1}
+            {/* Size Selection */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold">Size</label>
+                <button
+                  className="text-sm text-primary hover:underline flex items-center gap-1"
+                  onClick={() => {
+                    /* Logic to open size chart modal could go here */
+                  }}
+                >
+                  Size Guide
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+              </div>
+              {availableSizes.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {availableSizes.map((size) => {
+                    const isSelected = selectedSize === size;
+                    return (
+                      <button
+                        key={size}
+                        onClick={() => setSelectedSize(size)}
+                        className={cn(
+                          "min-w-[3rem] px-3 py-2 rounded-md border text-sm font-medium transition-all",
+                          isSelected
+                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                            : "border-border hover:border-primary/50 hover:bg-accent"
+                        )}
+                        title={size}
+                        aria-label={`Select ${size} size`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  {selectedColor
+                    ? `No sizes available for ${selectedColor}`
+                    : 'No sizes available'}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Quantity & Add to Cart */}
+          <div className="space-y-4 pt-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold">Quantity</label>
+              <div className="flex items-center border rounded-md">
+                <button
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  className="p-2 hover:bg-accent hover:text-accent-foreground transition-colors"
+                  disabled={quantity <= 1}
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="w-12 text-center font-medium">{quantity}</span>
+                <button
+                  onClick={() => setQuantity(quantity + 1)}
+                  className="p-2 hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                size="lg"
+                className="flex-1 text-base font-semibold shadow-md active:scale-[0.98] transition-all"
+                onClick={handleAddToCart}
               >
-                <Minus className="w-4 h-4" />
-              </button>
-              <span className="w-12 text-center font-medium">{quantity}</span>
-              <button
-                onClick={() => setQuantity(quantity + 1)}
-                className="p-2 hover:bg-accent hover:text-accent-foreground transition-colors"
+                <ShoppingCart className="w-5 h-5 mr-2" />
+                Add to Cart
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="flex-1 text-base font-semibold border-2 hover:bg-accent/50"
+                onClick={handleBuyNow}
               >
-                <Plus className="w-4 h-4" />
-              </button>
+                Buy it now
+              </Button>
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <Button
-              size="lg"
-              className="flex-1 text-base font-semibold shadow-md active:scale-[0.98] transition-all"
-              onClick={handleAddToCart}
-            >
-              <ShoppingCart className="w-5 h-5 mr-2" />
-              Add to Cart
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="flex-1 text-base font-semibold border-2 hover:bg-accent/50"
-              onClick={handleBuyNow}
-            >
-              Buy it now
-            </Button>
-          </div>
-        </div>
-
-        {/* Trust Badges */}
-        <div className="grid gap-3 pt-6">
-          <div className="flex items-start gap-3 p-3 rounded-lg bg-secondary/30 border border-border/50">
-            <div className="p-2 bg-background rounded-full shadow-sm">
-              <Truck className="w-4 h-4 text-green-600" />
+          {/* Trust Badges */}
+          <div className="grid gap-3 pt-6">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-secondary/30 border border-border/50">
+              <div className="p-2 bg-background rounded-full shadow-sm">
+                <Truck className="w-4 h-4 text-green-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Fast Fulfillment</p>
+                <p className="text-xs text-muted-foreground">Ships in 2-3 business days</p>
+              </div>
             </div>
-            <div>
-              <p className="font-semibold text-sm">Fast Fulfillment</p>
-              <p className="text-xs text-muted-foreground">Ships in 2-3 business days</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 p-3 rounded-lg bg-secondary/30 border border-border/50">
-            <div className="p-2 bg-background rounded-full shadow-sm">
-              <Shield className="w-4 h-4 text-blue-600" />
-            </div>
-            <div>
-              <p className="font-semibold text-sm">Quality Guarantee</p>
-              <p className="text-xs text-muted-foreground">30-day hassle-free returns</p>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-secondary/30 border border-border/50">
+              <div className="p-2 bg-background rounded-full shadow-sm">
+                <Shield className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Quality Guarantee</p>
+                <p className="text-xs text-muted-foreground">30-day hassle-free returns</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
 
+      <div className="mb-12">
+        <ProductDescription
+          description={product.description}
+          category={product.categoryId}
+          subcategoryIds={product.subcategoryIds || []}
+        />
+      </div>
+
+      {/* 3. KEY FEATURES - Full Width Section */}
+      <div className="mb-12">
+        <KeyFeatures attributes={product.catalogProduct?.attributes || {}} />
+      </div>
+
+      {/* 4. CARE INSTRUCTIONS - Full Width Section */}
+      <div className="mb-12">
+        <CareInstructions />
+      </div>
+    </>
+  );
   // Render product recommendations
   const renderRecommendations = (heading?: string, subheading?: string) => (
     <>
@@ -1254,7 +1384,7 @@ const StoreProductPage = () => {
                     {renderProductDetails()}
 
                     {/* Tabs - included in product details section for now */}
-                    <div className="mt-16">
+                    {/* <div className="mt-16">
                       <Tabs defaultValue="description" className="w-full">
                         <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
                           <TabsTrigger
@@ -1291,9 +1421,9 @@ const StoreProductPage = () => {
                             </ul>
                           </div>
                         </TabsContent>
-                        <TabsContent value="reviews" className="pt-8">
-                          {/* Reviews Tab Content - kept for backward compatibility if user wants inside tabs */}
-                          <div className="space-y-8">
+                        <TabsContent value="reviews" className="pt-8"> */}
+                    {/* Reviews Tab Content - kept for backward compatibility if user wants inside tabs */}
+                    {/* <div className="space-y-8">
                             <div className="flex items-center justify-between">
                               <h3 className="text-xl font-bold">Customer Reviews</h3>
                               <Button>Write a Review</Button>
@@ -1335,8 +1465,8 @@ const StoreProductPage = () => {
                               ))}
                             </div>
                           </div>
-                        </TabsContent>
-                        <TabsContent value="size-chart" className="pt-8">
+                        </TabsContent> */}
+                    {/* <TabsContent value="size-chart" className="pt-8">
                           <div className="max-w-2xl border rounded-lg overflow-hidden">
                             <table className="w-full text-sm">
                               <thead className="bg-muted">
@@ -1359,7 +1489,7 @@ const StoreProductPage = () => {
                           </div>
                         </TabsContent>
                       </Tabs>
-                    </div>
+                    </div> */}
                   </main>
                 </div>
               );
@@ -1371,18 +1501,18 @@ const StoreProductPage = () => {
                 </div>
               );
             }
-            if (section.type === 'reviews') {
-              return (
-                <div key={section.id} className="bg-muted/10">
-                  <div className="container mx-auto px-4">
-                    <ReviewsSection
-                      productId={productId || ''}
-                      heading={section.settings?.heading || "Customer Reviews"}
-                    />
-                  </div>
-                </div>
-              );
-            }
+            // if (section.type === 'reviews') {
+            //   return (
+            //     <div key={section.id} className="bg-muted/10">
+            //       <div className="container mx-auto px-4">
+            //         <ReviewsSection
+            //           productId={productId || ''}
+            //           heading={section.settings?.heading || "Customer Reviews"}
+            //         />
+            //       </div>
+            //     </div>
+            //   );
+            // }
             if (section.type === 'footer') {
               return (
                 <div key={section.id}>
@@ -1430,7 +1560,7 @@ const StoreProductPage = () => {
             {renderProductDetails()}
 
             {/* Tabs */}
-            <div className="mt-16">
+            {/* <div className="mt-16">
               <Tabs defaultValue="description" className="w-full">
                 <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
                   <TabsTrigger
@@ -1534,7 +1664,7 @@ const StoreProductPage = () => {
                   </div>
                 </TabsContent>
               </Tabs>
-            </div>
+            </div> */}
 
             {renderRecommendations()}
           </main>

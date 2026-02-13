@@ -444,17 +444,17 @@ router.get('/catalog/active', async (req, res) => {
     if (subcategory && String(subcategory).trim()) {
       const subcategoryTerm = String(subcategory).trim();
       const escapedTerm = subcategoryTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      
+
       // Create regex patterns that match both hyphenated and spaced versions
       // e.g., "tote-bag" or "tote-bags" should match "Tote Bag" in database
       // Convert hyphens to optional space/hyphen pattern: "tote-bag" -> "tote[- ]bag"
       const normalizedPattern = escapedTerm.replace(/-/g, '[- ]');
-      
+
       // Also handle singular/plural variations by making the last word optional
       // e.g., "tote-bags" should match "Tote Bag" (singular in DB)
       // Remove trailing 's' and make it optional: "tote-bags" -> "tote[- ]bag(s)?"
       const singularPattern = normalizedPattern.replace(/s\?$/, '').replace(/s$/, '(s)?');
-      
+
       andConditions.push({
         subcategoryIds: {
           $in: [
@@ -586,7 +586,7 @@ router.get('/:id', async (req, res) => {
     }
 
     // Fetch variants from separate collection - only active variants
-    const variants = await CatalogProductVariant.find({ 
+    const variants = await CatalogProductVariant.find({
       catalogProductId: product._id,
       isActive: true
     }).sort({ size: 1, color: 1 });
@@ -721,7 +721,7 @@ router.put('/:id', protect, authorize('superadmin'), async (req, res) => {
       }
     } else {
       // Fetch existing variants if not updating them - only active variants
-      updatedVariants = await CatalogProductVariant.find({ 
+      updatedVariants = await CatalogProductVariant.find({
         catalogProductId: product._id,
         isActive: true
       }).sort({ size: 1, color: 1 });

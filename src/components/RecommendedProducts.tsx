@@ -59,7 +59,7 @@ export const RecommendedProducts = () => {
                                 alt={product.name}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
-                            <button
+                            {/* <button
                                 className="absolute top-3 right-3 w-8 h-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
                                 aria-label="Add to wishlist"
                                 onClick={(e) => {
@@ -68,7 +68,7 @@ export const RecommendedProducts = () => {
                                 }}
                             >
                                 <Heart className="w-4 h-4 text-foreground" />
-                            </button>
+                            </button> */}
                         </div>
                         <div className="space-y-1">
                             <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">

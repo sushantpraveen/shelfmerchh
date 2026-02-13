@@ -19,7 +19,6 @@ const categories: CategoryItem[] = [
   { name: "Packaging", children: ["Boxes", "Tubes", "Bottles", "Pouch", "Cosmetics", "Bottles"] },
   { name: "Tech", children: ["IPhone Cases", "Lap Top Cases", "IPad Cases", "Macbook Cases", "Phone Cases"] },
   { name: "Jewelry", children: ["Rings", "Necklaces", "Earrings", "Bracelets"] },
-
 ];
 
 const slugify = (value: string): string => {
@@ -31,11 +30,16 @@ const slugify = (value: string): string => {
     .replace(/-+/g, "-");
 };
 
-interface CategorySectionProps {
+interface CategorySidebarProps {
+  onToggleSubcategory?: (subcategoryName: string, categoryName: string) => void;
+  selectedSubcategories?: Set<string>;
+}
+
+interface CategorySectionProps extends CategorySidebarProps {
   category: CategoryItem;
 }
 
-const CategorySection = ({ category }: CategorySectionProps) => {
+const CategorySection = ({ category, onToggleSubcategory, selectedSubcategories }: CategorySectionProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -47,21 +51,34 @@ const CategorySection = ({ category }: CategorySectionProps) => {
         <span>{category.name}</span>
         {category.children && (
           <ChevronDown
-            className={`w-4 h-4 transition-transform ${
-              isOpen ? "rotate-180" : ""
-            }`}
+            className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
           />
         )}
       </button>
       {isOpen && category.children && (
         <div className="pl-4 pt-1 space-y-1">
           {category.children.map((child) => {
+            const isSelected = selectedSubcategories?.has(child);
             const slug = slugify(child);
+
+            if (onToggleSubcategory) {
+              return (
+                <button
+                  key={child}
+                  onClick={() => onToggleSubcategory(child, category.name)}
+                  className={`block w-full text-left text-sm transition-colors py-1 ${isSelected ? "text-primary font-medium" : "text-foreground hover:text-primary"
+                    }`}
+                >
+                  {child}
+                </button>
+              );
+            }
+
             return (
               <Link
                 key={child}
                 to={`/products/category/${slug}`}
-                className="block w-full text-left text-sm text-foreground hover:text-foreground transition-colors py-1"
+                className="block w-full text-left text-sm text-foreground hover:text-primary transition-colors py-1"
               >
                 {child}
               </Link>
@@ -73,14 +90,18 @@ const CategorySection = ({ category }: CategorySectionProps) => {
   );
 };
 
-export const CategorySidebar = () => {
+export const CategorySidebar = ({ onToggleSubcategory, selectedSubcategories }: CategorySidebarProps) => {
   return (
-    <aside className="w-64 flex-shrink-0 hidden lg:block">
+    <aside className="flex-shrink-0">
       <div className="sticky top-4 bg-background">
-        
         <nav className="space-y-0">
           {categories.map((category) => (
-            <CategorySection key={category.name} category={category} />
+            <CategorySection
+              key={category.name}
+              category={category}
+              onToggleSubcategory={onToggleSubcategory}
+              selectedSubcategories={selectedSubcategories}
+            />
           ))}
         </nav>
       </div>

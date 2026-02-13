@@ -35,6 +35,7 @@ export interface Product {
     categoryId?: string;
     subcategoryIds?: string[];
     productTypeCode?: string;
+    attributes?: Record<string, any>;
   };
   createdAt: string;
   updatedAt: string;

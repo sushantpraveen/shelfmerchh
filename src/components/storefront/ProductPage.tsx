@@ -121,7 +121,7 @@ const ProductPage = () => {
               </Link>
               <nav className="hidden md:flex items-center gap-6">
                 <a href="#details" className="text-sm text-muted-foreground hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-primary after:transition-all hover:after:w-full">Details</a>
-                <a href="#reviews" className="text-sm text-muted-foreground hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-primary after:transition-all hover:after:w-full">Reviews</a>
+                {/* <a href="#reviews" className="text-sm text-muted-foreground hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-primary after:transition-all hover:after:w-full">Reviews</a> */}
                 <a href="#size-chart" className="text-sm text-muted-foreground hover:text-primary transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-primary after:transition-all hover:after:w-full">Size chart</a>
               </nav>
             </div>
@@ -194,12 +194,12 @@ const ProductPage = () => {
 
                 {/* Wishlist & Share */}
                 <div className="absolute top-4 right-4 flex flex-col gap-2">
-                  <button
+                  {/* <button
                     onClick={() => setIsWishlisted(!isWishlisted)}
                     className={`p-2.5 rounded-full shadow-lg transition-all hover:scale-110 ${isWishlisted ? 'bg-red-500 text-white' : 'bg-background/80 backdrop-blur-sm hover:bg-background'}`}
                   >
                     <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
-                  </button>
+                  </button> */}
                   <button className="p-2.5 bg-background/80 backdrop-blur-sm rounded-full shadow-lg hover:bg-background transition-all hover:scale-110">
                     <Share2 className="w-5 h-5" />
                   </button>
@@ -240,9 +240,9 @@ const ProductPage = () => {
                     {product.rating}
                   </span>
                 </div>
-                <a href="#reviews" className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline">
+                {/* <a href="#reviews" className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline">
                   {product.reviewCount} reviews
-                </a>
+                </a> */}
               </div>
 
               {/* Title */}
@@ -405,16 +405,16 @@ const ProductPage = () => {
       </section>
 
       {/* Customer Reviews */}
-      <section id="reviews" className="py-16 bg-gradient-to-b from-muted/30 to-transparent">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
+      {/* <section id="reviews" className="py-16 bg-gradient-to-b from-muted/30 to-transparent">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"> */}
+          {/* <div className="text-center mb-12">
             <span className="text-primary font-medium text-sm tracking-wider uppercase">Testimonials</span>
             <h2 className="font-display text-3xl lg:text-4xl font-bold text-foreground mt-2">Customer Reviews</h2>
             <p className="text-muted-foreground mt-2 max-w-md mx-auto">Real feedback from shoppers who purchased this product.</p>
-          </div>
+          </div> */}
 
           {/* Reviews Summary */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-12 p-6 bg-background rounded-2xl border border-border">
+          {/* <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-12 p-6 bg-background rounded-2xl border border-border">
             <div className="text-center">
               <span className="text-5xl font-bold text-foreground">{product.rating}</span>
               <div className="flex justify-center mt-2">{renderStars(product.rating)}</div>
@@ -435,9 +435,9 @@ const ProductPage = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </div> */}
 
-          <div className="grid md:grid-cols-3 gap-6">
+          {/* <div className="grid md:grid-cols-3 gap-6">
             {reviews.map((review, index) => (
               <div
                 key={index}
@@ -464,13 +464,13 @@ const ProductPage = () => {
                 <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
               </div>
             ))}
-          </div>
+          </div> */}
 
-          <div className="text-center mt-8">
+          {/* <div className="text-center mt-8">
             <button className="btn-outline-store">Load more reviews</button>
-          </div>
-        </div>
-      </section>
+          </div> */}
+        {/* </div>
+      </section> */}
 
       {/* Size Chart */}
       <section id="size-chart" className="py-16">
