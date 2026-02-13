@@ -1,0 +1,72 @@
+{
+  "steps": [
+    {
+      "step": "login",
+      "success": true
+    },
+    {
+      "step": "get_catalog",
+      "success": true,
+      "productName": "Laptop skin",
+      "productId": "697372c01cc78f351b557766"
+    },
+    {
+      "step": "save1",
+      "success": true,
+      "data": {
+        "success": true,
+        "message": "Store product saved",
+        "data": {
+          "storeProduct": {
+            "storeId": "698f0c9e0f1fba24773676b6",
+            "catalogProductId": "697372c01cc78f351b557766",
+            "title": "First Listing",
+            "description": "First listing description",
+            "sellingPrice": 1000,
+            "tags": [],
+            "status": "published",
+            "publishedAt": "2026-02-13T11:40:47.696Z",
+            "isActive": true,
+            "_id": "698f0dbfacb82891417bc209",
+            "variantsSummary": [],
+            "galleryImages": [],
+            "createdAt": "2026-02-13T11:40:47.700Z",
+            "updatedAt": "2026-02-13T11:40:47.700Z",
+            "__v": 0
+          },
+          "variants": []
+        }
+      }
+    },
+    {
+      "step": "save2",
+      "success": true,
+      "data": {
+        "success": true,
+        "message": "Store product saved",
+        "data": {
+          "storeProduct": {
+            "storeId": "698f0c9e0f1fba24773676b6",
+            "catalogProductId": "697372c01cc78f351b557766",
+            "title": "Second Listing",
+            "description": "Second listing description",
+            "sellingPrice": 1200,
+            "tags": [],
+            "status": "published",
+            "publishedAt": "2026-02-13T11:40:47.969Z",
+            "isActive": true,
+            "_id": "698f0dbfacb82891417bc210",
+            "variantsSummary": [],
+            "galleryImages": [],
+            "createdAt": "2026-02-13T11:40:47.970Z",
+            "updatedAt": "2026-02-13T11:40:47.970Z",
+            "__v": 0
+          },
+          "variants": []
+        }
+      }
+    }
+  ],
+  "finalResult": "FAIL_IDENTICAL_IDS",
+  "error": null
+}

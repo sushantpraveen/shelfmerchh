@@ -54,36 +54,47 @@ router.post('/', protect, authorize('merchant', 'superadmin'), async (req, res) 
       return res.status(403).json({ success: false, message: 'Not authorized to modify this store' });
     }
 
-    // Upsert StoreProduct (unique by storeId+catalogProductId)
-    const spFilter = { storeId: store._id, catalogProductId };
-    const spUpdate = {
-      $set: {
-        storeId: store._id,
-        catalogProductId,
-        sellingPrice,
-        ...(compareAtPrice !== undefined ? { compareAtPrice } : {}),
-        ...(title ? { title } : {}),
-        ...(description ? { description } : {}),
-        ...(Array.isArray(tags) ? { tags } : {}),
-        ...(Array.isArray(galleryImages) ? { galleryImages } : {}),
-        ...(designData ? { designData } : {}),
-        isActive: true,
-        // Handle status: if provided, set it and publishedAt accordingly
-        ...(status === 'published' ? {
-          status: 'published',
-          publishedAt: new Date()
-        } : status === 'draft' ? {
-          status: 'draft',
-          publishedAt: undefined
-        } : {}),
-      },
+    const spUpdateData = {
+      storeId: store._id,
+      catalogProductId,
+      sellingPrice,
+      ...(compareAtPrice !== undefined ? { compareAtPrice } : {}),
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {}),
+      ...(Array.isArray(tags) ? { tags } : {}),
+      ...(Array.isArray(galleryImages) ? { galleryImages } : {}),
+      ...(designData ? { designData } : {}),
+      isActive: true,
+      // Handle status: if provided, set it and publishedAt accordingly
+      ...(status === 'published' ? {
+        status: 'published',
+        publishedAt: new Date()
+      } : status === 'draft' ? {
+        status: 'draft',
+        publishedAt: undefined
+      } : {}),
     };
 
-    const storeProduct = await StoreProduct.findOneAndUpdate(spFilter, spUpdate, {
-      new: true,
-      upsert: true,
-      setDefaultsOnInsert: true,
-    });
+    // Resolve StoreProduct: If ID provided, update; otherwise create new.
+    // This avoids overwriting other listings of the same catalog product.
+    const { id, _id } = req.body;
+    const spId = id || _id;
+    
+    let storeProduct;
+    if (spId && mongoose.Types.ObjectId.isValid(spId)) {
+      storeProduct = await StoreProduct.findOneAndUpdate(
+        { _id: spId, storeId: store._id },
+        { $set: spUpdateData },
+        { new: true }
+      );
+      if (!storeProduct) {
+        return res.status(404).json({ success: false, message: 'Store product to update not found' });
+      }
+    } else {
+      // Create new listing
+      storeProduct = new StoreProduct(spUpdateData);
+      await storeProduct.save();
+    }
 
     let createdVariants = [];
     if (Array.isArray(variants) && variants.length > 0) {

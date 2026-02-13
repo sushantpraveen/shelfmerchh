@@ -15,7 +15,7 @@ const Orders = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
@@ -103,7 +103,7 @@ const Orders = () => {
       filtered = filtered.filter((order) => {
         // Search by customer email
         const emailMatch = order.customerEmail?.toLowerCase().includes(query);
-        
+
         // Search by product name (from order items)
         const productMatch = order.items?.some((item: any) => {
           const productName = item.productName || '';
@@ -124,17 +124,17 @@ const Orders = () => {
       filtered = filtered.filter((order) => {
         if (!order.createdAt) return false;
         const orderDate = new Date(order.createdAt);
-        
+
         if (selectedMonth !== 'all') {
           const monthMatch = orderDate.getMonth() === parseInt(selectedMonth);
           if (!monthMatch) return false;
         }
-        
+
         if (selectedYear !== 'all') {
           const yearMatch = orderDate.getFullYear() === parseInt(selectedYear);
           if (!yearMatch) return false;
         }
-        
+
         return true;
       });
     }
@@ -144,7 +144,7 @@ const Orders = () => {
       filtered.sort((a, b) => {
         const amountA = a.total !== undefined ? a.total : 0;
         const amountB = b.total !== undefined ? b.total : 0;
-        
+
         if (amountSort === 'low-high') {
           return amountA - amountB;
         } else if (amountSort === 'high-low') {
@@ -162,7 +162,7 @@ const Orders = () => {
 
         if (alphabeticalSort === 'product-az' || alphabeticalSort === 'product-za') {
           // Sort by product name
-          const productA = a.items && a.items.length > 0 
+          const productA = a.items && a.items.length > 0
             ? (a.items[0].productName || '')
             : '';
           const productB = b.items && b.items.length > 0
@@ -177,7 +177,7 @@ const Orders = () => {
         }
 
         const comparison = compareA.localeCompare(compareB);
-        
+
         if (alphabeticalSort === 'product-za' || alphabeticalSort === 'email-za') {
           return -comparison; // Reverse for Z-A
         }
@@ -200,154 +200,172 @@ const Orders = () => {
   };
 
   return (
-  
+
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold">Orders</h1>
-            <p className="text-muted-foreground mt-1">
-              Track and manage all your customer orders
-            </p>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">Orders</h1>
+          <p className="text-muted-foreground mt-1">
+            Track and manage all your customer orders
+          </p>
+        </div>
+
+        {/* Search and Filters */}
+        <div className="mb-6 space-y-4">
+          {/* Search Bar */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search orders..."
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
 
-          {/* Search and Filters */}
-          <div className="mb-6 space-y-4">
-            {/* Search Bar */}
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search orders..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+          {/* Filters Row */}
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Status Filter */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in-production">In Production</SelectItem>
+                <SelectItem value="shipped">Shipped</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="on-hold">On-hold</SelectItem>
+                <SelectItem value="delivered">Delivered</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
 
-            {/* Filters Row */}
-            <div className="flex flex-wrap gap-3 items-center">
-              {/* Status Filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="in-production">In Production</SelectItem>
-                  <SelectItem value="shipped">Shipped</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="on-hold">On-hold</SelectItem>
-                  <SelectItem value="delivered">Delivered</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem> 
-                </SelectContent>
-              </Select>
+            {/* Month Filter */}
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="All Months" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((month) => (
+                  <SelectItem key={month.value} value={month.value}>
+                    {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              {/* Month Filter */}
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="All Months" />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthOptions.map((month) => (
-                    <SelectItem key={month.value} value={month.value}>
-                      {month.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Year Filter */}
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="All Years" />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((year) => (
+                  <SelectItem key={year.value} value={year.value}>
+                    {year.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              {/* Year Filter */}
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="All Years" />
-                </SelectTrigger>
-                <SelectContent>
-                  {yearOptions.map((year) => (
-                    <SelectItem key={year.value} value={year.value}>
-                      {year.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Amount Sort */}
+            <Select value={amountSort} onValueChange={setAmountSort}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Sort by Amount" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="low-high">Low → High</SelectItem>
+                <SelectItem value="high-low">High → Low</SelectItem>
+              </SelectContent>
+            </Select>
 
-              {/* Amount Sort */}
-              <Select value={amountSort} onValueChange={setAmountSort}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Sort by Amount" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="low-high">Low → High</SelectItem>
-                  <SelectItem value="high-low">High → Low</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Alphabetical Sort */}
-              <Select value={alphabeticalSort} onValueChange={setAlphabeticalSort}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Sort Alphabetically" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="product-az">Product (A → Z)</SelectItem>
-                  <SelectItem value="product-za">Product (Z → A)</SelectItem>
-                  <SelectItem value="email-az">Email (A → Z)</SelectItem>
-                  <SelectItem value="email-za">Email (Z → A)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Alphabetical Sort */}
+            <Select value={alphabeticalSort} onValueChange={setAlphabeticalSort}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort Alphabetically" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="product-az">Product (A → Z)</SelectItem>
+                <SelectItem value="product-za">Product (Z → A)</SelectItem>
+                <SelectItem value="email-az">Email (A → Z)</SelectItem>
+                <SelectItem value="email-za">Email (Z → A)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+        </div>
 
-          {/* Orders Table */}
-          {error && (
-            <p className="mb-4 text-sm text-destructive">{error}</p>
-          )}
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading orders...</p>
-          ) : orders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No orders found yet.</p>
-          ) : (
-            <Card className="overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Order ID</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Product</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Customer</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Amount</th>
+        {/* Orders Table */}
+        {error && (
+          <p className="mb-4 text-sm text-destructive">{error}</p>
+        )}
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading orders...</p>
+        ) : orders.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No orders found yet.</p>
+        ) : (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-semibold">Order ID</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold">Product</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold">Customer</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold">Date</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold">Status</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {orders.map((order) => (
+                    <tr key={(order as any)._id || order.id || `order-${Math.random()}`} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-6 py-4 text-sm font-medium">#{(order as any)._id || order.id || 'N/A'}</td>
+                      <td className="px-6 py-4 text-sm">
+                        {order.items && order.items.length > 0 ? (
+                          <div className="space-y-1">
+                            {order.items.map((item: any, idx: number) => (
+                              <div key={idx} className="flex flex-wrap items-center gap-1">
+                                <span className="font-medium whitespace-nowrap">{item.productName}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {item.variant && (
+                                    <>
+                                      ({[item.variant.size, item.variant.color].filter(Boolean).join(' / ')})
+                                    </>
+                                  )}
+                                </span>
+                                <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                  x{item.quantity}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          'No items'
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm">{order.customerEmail}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                        {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '-'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge className={getStatusColor(order.status)}>
+                          {order.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-semibold">
+                        {order.total !== undefined ? `₹${order.total.toFixed(2)}` : '-'}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {orders.map((order) => (
-                      <tr key={(order as any)._id || order.id || `order-${Math.random()}`} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-6 py-4 text-sm font-medium">#{(order as any)._id || order.id || 'N/A'}</td>
-                        <td className="px-6 py-4 text-sm">
-                          {order.items && order.items.length > 0
-                            ? order.items[0].productName || `${order.items.length} items`
-                            : 'No items'}
-                        </td>
-                        <td className="px-6 py-4 text-sm">{order.customerEmail}</td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">
-                          {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '-'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge className={getStatusColor(order.status)}>
-                            {order.status}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-sm font-semibold">
-                          {order.total !== undefined ? `₹${order.total.toFixed(2)}` : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );

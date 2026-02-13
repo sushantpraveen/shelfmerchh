@@ -337,9 +337,45 @@ const Dashboard = () => {
     return `${(bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1)} ${sizes[i]}`;
   };
 
+  const totalProductsCount = useMemo(() => {
+    return storeProducts.reduce((sum, sp) => {
+      if (Array.isArray(sp.variantsSummary) && sp.variantsSummary.length > 0) {
+        return sum + sp.variantsSummary.length;
+      }
+      return sum + 1;
+    }, 0);
+  }, [storeProducts]);
+
+  const tableData = useMemo(() => {
+    const flattened: any[] = [];
+    storeProducts.forEach((sp) => {
+      if (Array.isArray(sp.variantsSummary) && sp.variantsSummary.length > 0) {
+        sp.variantsSummary.forEach((v: any) => {
+          flattened.push({
+            ...sp,
+            _displayVariantId: v._id,
+            displayTitle: sp.title || 'Untitled',
+            displayVariant: `${v.size || ''} ${v.color || ''}`.trim(),
+            displayPrice: v.sellingPrice || sp.sellingPrice,
+            isVariant: true
+          });
+        });
+      } else {
+        flattened.push({
+          ...sp,
+          displayTitle: sp.title || 'Untitled',
+          displayVariant: '',
+          displayPrice: sp.sellingPrice,
+          isVariant: false
+        });
+      }
+    });
+    return flattened;
+  }, [storeProducts]);
+
   const stats = [
     { label: 'Total Orders', value: `${orders.length}`, icon: ShoppingBag, color: 'text-primary' },
-    { label: 'Products', value: `${storeProducts.length}`, icon: Package, color: 'text-blue-500' },
+    { label: 'Products', value: `${totalProductsCount}`, icon: Package, color: 'text-blue-500' },
     {
       label: 'Revenue',
       value: `₹${orders.reduce((sum, order) => sum + (order.total || 0), 0).toFixed(2)}`,
@@ -426,7 +462,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {storeProducts.map((sp: any) => {
+                  {tableData.map((sp: any) => {
                     // Extract previewImagesByView - it's an object with mockup IDs as keys and image URLs as values
                     const previewImagesByView = sp.designData?.previewImagesByView || sp.previewImagesByView || {};
                     const previewImageUrls = Object.values(previewImagesByView).filter((url): url is string =>
@@ -434,13 +470,15 @@ const Dashboard = () => {
                     );
                     const mockup = previewImageUrls[0] || undefined;
                     const isSelected = selectedProducts.includes(sp._id);
+                    const rowKey = sp._displayVariantId ? `${sp._id}-${sp._displayVariantId}` : sp._id;
+
                     return (
-                      <tr key={sp._id} className="hover:bg-muted/20 transition-colors">
+                      <tr key={rowKey} className="hover:bg-muted/20 transition-colors">
                         <td className="px-6 py-3 align-middle">
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={(checked) => setSelectedProducts(prev => Boolean(checked) ? [...new Set([...prev, sp._id])] : prev.filter(id => id !== sp._id))}
-                            aria-label={`Select ${sp.title || 'Untitled'}`}
+                            aria-label={`Select ${sp.displayTitle || 'Untitled'}`}
                           />
                         </td>
                         <td className="px-2 py-4 align-middle">
@@ -458,13 +496,16 @@ const Dashboard = () => {
                           >
                             <div className="h-14 w-14 rounded-md border bg-muted overflow-hidden flex items-center justify-center">
                               {mockup ? (
-                                <img src={mockup} alt={sp.title || 'Untitled'} className="h-full w-full object-cover" />
+                                <img src={mockup} alt={sp.displayTitle || 'Untitled'} className="h-full w-full object-cover" />
                               ) : (
                                 <Package className="h-6 w-6 text-muted-foreground" />
                               )}
                             </div>
                             <div>
-                              <p className="font-medium leading-tight line-clamp-1">{sp.title || 'Untitled'}</p>
+                              <p className="font-medium leading-tight line-clamp-1">{sp.displayTitle || 'Untitled'}</p>
+                              {sp.displayVariant && (
+                                <p className="text-xs font-semibold text-primary">{sp.displayVariant}</p>
+                              )}
                               <p className="text-xs text-muted-foreground line-clamp-1">Status: {sp.status}</p>
                             </div>
                           </div>
@@ -473,42 +514,28 @@ const Dashboard = () => {
                           {new Date(sp.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-2 py-4 align-middle hidden lg:table-cell text-muted-foreground">
-                          {(() => {
-                            let basePrice = typeof sp.sellingPrice === 'number' ? sp.sellingPrice : 0;
-                            if (Array.isArray(sp.variantsSummary) && sp.variantsSummary.length > 0) {
-                              const variantPrices = sp.variantsSummary
-                                .map((v: any) => v.sellingPrice)
-                                .filter((p: any) => typeof p === 'number' && p > 0);
-                              if (variantPrices.length > 0) {
-                                basePrice = Math.min(...variantPrices);
-                              }
-                            }
-                            return `₹${basePrice.toFixed(2)}`;
-                          })()}
+                          ₹{Number(sp.displayPrice || 0).toFixed(2)}
                         </td>
                         <td className="px-2 py-4 align-middle hidden lg:table-cell text-muted-foreground">
                           {mockup ? 'Preview saved' : 'No mockup'}
                         </td>
                         <td className="px-2 py-4 align-middle">
                           <div className="flex justify-end gap-2">
-                            {/* Publish/Draft toggle */}
+                            {/* ... existing actions ... */}
                             {sp.status === 'draft' ? (
                               <Button size="sm" variant="outline" onClick={() => handlePublishClick(sp)}>Publish</Button>
                             ) : (
                               <Button size="sm" variant="secondary" onClick={() => updateStoreProduct(sp._id, { status: 'draft' })}>Mark Draft</Button>
                             )}
-                            {/* Active toggle */}
                             <Button size="sm" variant="outline" onClick={() => updateStoreProduct(sp._id, { isActive: !sp.isActive })}>
                               {sp.isActive ? 'Deactivate' : 'Activate'}
                             </Button>
-                            {/* Edit in Designer */}
                             <Button size="sm" variant="ghost" onClick={(e) => {
                               e.stopPropagation();
                               handleEditProduct(sp);
                             }}>
                               Edit
                             </Button>
-                            {/* Delete */}
                             <Button size="sm" variant="destructive" onClick={() => deleteStoreProduct(sp._id)}>Delete</Button>
                           </div>
                         </td>

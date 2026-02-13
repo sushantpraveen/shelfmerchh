@@ -110,10 +110,11 @@ const StoreProductSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index: one StoreProduct per store+catalogProduct
+// Compound index: allow multiple StoreProducts per store+catalogProduct
+// This enables merchants to have multiple separate listings of the same base item
 StoreProductSchema.index(
   { storeId: 1, catalogProductId: 1 },
-  { unique: true }
+  { unique: false }
 );
 
 StoreProductSchema.index({ isActive: 1 });
