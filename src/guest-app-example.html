@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guest App - Sponsor Widget Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>My Corporate Responsibility Portal</h1>
+        <p>Welcome to our partner portal. Below you can sponsor a cause directly.</p>
+    </header>
+
+    <div class="card">
+        <h2>Sponsor a Cause</h2>
+        <p>Use the widget below to contribute to our partner causes.</p>
+
+        <!-- WIDGET CONTAINER -->
+        <!-- Replace data-cause-id with a specific ID to pre-select a cause -->
+        <div id="causeconn-sponsor-widget" data-theme="light"></div>
+    </div>
+
+    <!-- WIDGET SCRIPT -->
+    <script src="http://localhost:8085/widget/embed.js"></script>
+
+    <!-- EVENT LISTENER EXAMPLE -->
+    <script>
+        window.addEventListener('causeconnSponsorSuccess', (e) => {
+            console.log('Guest App Received Success Event:', e.detail);
+            alert(`Thanks ${e.detail.organizationName}! Your sponsorship of ${e.detail.totalAmount} is confirmed.`);
+        });
+    </script>
+</body>
+
+</html>

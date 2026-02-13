@@ -1,0 +1,416 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config();
+
+// Validate required environment variables
+const requiredEnvVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MONGO_URL'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error('\n❌ ERROR: Missing required environment variables:');
+  missingVars.forEach(varName => {
+    console.error(`   - ${varName}`);
+  });
+  console.error('\n📝 Please create a .env file in the backend directory with these variables.');
+  console.error('💡 Run "node generate-secrets.js" to generate secure JWT secrets.\n');
+  process.exit(1);
+}
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const productRoutes = require('./routes/products');
+const variantRoutes = require('./routes/variants');
+const variantOptionsRoutes = require('./routes/variantOptions');
+const catalogueFieldsRoutes = require('./routes/catalogueFields');
+const uploadRoutes = require('./routes/upload');
+const assetsRoutes = require('./routes/assets');
+const storeRoutes = require('./routes/stores');
+const storeBuilderRoutes = require('./routes/storeBuilder');
+const storeProductsRoutes = require('./routes/storeProducts');
+const storeCheckoutRoutes = require('./routes/storeCheckout');
+const storeOrdersRoutes = require('./routes/storeOrders');
+const storeCustomerOrdersRoutes = require('./routes/storeCustomerOrders');
+const storeCustomersRoutes = require('./routes/storeCustomers');
+const shippingQuoteRoutes = require('./routes/shippingQuoteRoutes');
+const invoiceRoutes = require('./routes/invoices');
+const walletRoutes = require('./routes/wallet');
+const adminWalletRoutes = require('./routes/adminWallet');
+const razorpayWebhookRoutes = require('./routes/razorpayWebhook');
+const merchantWithdrawalsRoutes = require('./routes/merchantWithdrawals');
+const adminWithdrawalsRoutes = require('./routes/adminWithdrawals');
+const reviewsRoutes = require('./routes/reviews');
+const { tenantResolver } = require('./middleware/tenantResolver');
+const storeRedirect = require('./middleware/storeRedirect');
+
+// Initialize Express app
+const app = express();
+
+// CORS configuration - MUST BE FIRST
+// Supports wildcard subdomains for multi-tenant architecture
+const corsOptions = {
+  origin: function (origin, callback) {
+    const BASE_DOMAIN = process.env.BASE_DOMAIN || 'shelfmerch.in';
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // Build allowed origins list
+    const allowedOrigins = process.env.CORS_ORIGINS
+      ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+      : [];
+
+    // Always allow root domain
+    allowedOrigins.push(`https://${BASE_DOMAIN}`);
+    allowedOrigins.push(`http://${BASE_DOMAIN}`);
+
+    // Allow CLIENT_URL if defined
+    if (process.env.CLIENT_URL) {
+      allowedOrigins.push(process.env.CLIENT_URL);
+    }
+
+    allowedOrigins.push('http://localhost:8080');
+    allowedOrigins.push('http://72.62.76.198:8080');
+    allowedOrigins.push('http://localhost:8085');
+
+    // In production, allow wildcard subdomains (*.shelfmerch.in)
+    if (isProduction) {
+      // Allow any subdomain of base domain
+      if (origin.match(new RegExp(`^https://[^.]+\.${BASE_DOMAIN.replace('.', '\\.')}$`))) {
+        console.log(`✓ CORS allowed for subdomain origin: ${origin}`);
+        return callback(null, true);
+      }
+    }
+
+    // In development, allow all localhost origins and localhost subdomains
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        console.log(`✓ CORS allowed for localhost origin: ${origin}`);
+        return callback(null, true);
+      }
+      // Also allow localhost subdomains for dev (e.g., xyz.localhost:3000)
+      if (origin.match(/^https?:\/\/[^.]+\.localhost(:\d+)?$/)) {
+        console.log(`✓ CORS allowed for localhost subdomain: ${origin}`);
+        return callback(null, true);
+      }
+    }
+
+    // Check explicit allowed origins
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log(`✓ CORS allowed for origin: ${origin}`);
+      callback(null, true);
+    } else {
+      console.warn(`❌ CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Host', 'X-API-Key'],
+  exposedHeaders: ['Authorization'],
+  preflightContinue: false
+};
+
+// Apply CORS middleware (handles preflight OPTIONS requests automatically)
+app.use(cors(corsOptions));
+
+// Security middleware (after CORS)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Razorpay webhook route - MUST be registered BEFORE express.json() to get raw body
+// The webhook handler has its own express.raw() middleware
+app.use('/api/razorpay', razorpayWebhookRoutes);
+
+// Body parser middleware - Increased limit for base64 images
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Cookie parser
+app.use(cookieParser());
+
+const passport = require('passport');
+const session = require('express-session');
+
+// Trusted proxy (for accurate IP addresses and hostname behind reverse proxy)
+// Important: Must trust proxy to get correct hostname from nginx/load balancer
+app.set('trust proxy', 1);
+
+// Express Session Middleware - Required for Passport OAuth state validation
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // true in production
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Passport Config
+require('./config/passport')(passport);
+
+// Passport Middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Enable subdomain routing by ensuring hostname is available
+app.use((req, res, next) => {
+  // Ensure hostname is set (important for subdomain extraction)
+  if (!req.hostname && req.get('host')) {
+    req.hostname = req.get('host').split(':')[0];
+  }
+  next();
+});
+
+// Rate limiting (skip for OPTIONS requests)
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 6000, // limit each IP to 1000 requests per windowMs (increased from 100)
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS' // Skip rate limiting for preflight
+});
+
+app.use('/api/', limiter);
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`Origin: ${req.headers.origin || 'none'}`);
+  if (req.method === 'OPTIONS') {
+    console.log('Preflight request received');
+  }
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    // Don't log full body for product routes (too large with base64 images)
+    if (req.path.includes('/products')) {
+      console.log(`Body size: ${JSON.stringify(req.body).length} characters`);
+    } else {
+      console.log(`Body:`, req.body);
+    }
+  }
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Store redirect middleware (redirects /store/:slug/* to subdomain in production)
+// Must be before API routes but after health check
+app.use(storeRedirect);
+
+// API Routes
+// Store-scoped routes that need tenant resolution
+app.use('/api/store-products', tenantResolver, storeProductsRoutes);
+app.use('/api/store-checkout', tenantResolver, storeCheckoutRoutes);
+app.use('/api/store-orders', tenantResolver, storeOrdersRoutes);
+app.use('/api/store-auth', tenantResolver, require('./routes/storeAuth'));
+app.use('/api/store-customer/orders', tenantResolver, storeCustomerOrdersRoutes);
+app.use('/api/store-customers', tenantResolver, storeCustomersRoutes);
+app.use('/api/reviews', tenantResolver, reviewsRoutes);
+
+// Routes that may use tenant but don't require it (legacy support)
+app.use('/api/stores', tenantResolver, storeRoutes);
+app.use('/api/stores', tenantResolver, storeBuilderRoutes); // Builder routes under /api/stores/:id/builder
+
+// Routes that don't need tenant resolution (admin, auth, catalog)
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/variants', variantRoutes);
+app.use('/api/variant-options', variantOptionsRoutes);
+app.use('/api/catalogue-fields', catalogueFieldsRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/assets', assetsRoutes);
+app.use('/api/shipping-quote', shippingQuoteRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/admin/wallet', adminWalletRoutes);
+app.use('/api/merchant', merchantWithdrawalsRoutes);
+app.use('/api/admin/withdrawals', adminWithdrawalsRoutes);
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err.message || err);
+  if (err.stack && process.env.NODE_ENV === 'development') {
+    console.error('Error stack:', err.stack);
+  }
+
+  // CORS error
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      success: false,
+      message: 'CORS policy violation'
+    });
+  }
+
+  // Mongoose validation error
+  if (err.name === 'ValidationError') {
+    const messages = Object.values(err.errors).map(val => val.message);
+    return res.status(400).json({
+      success: false,
+      message: 'Validation Error',
+      errors: messages
+    });
+  }
+
+  // Mongoose duplicate key error
+  if (err.code === 11000) {
+    return res.status(400).json({
+      success: false,
+      message: 'Duplicate field value entered'
+    });
+  }
+
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Token expired'
+    });
+  }
+
+  // Default error
+  res.status(err.statusCode || 500).json({
+    success: false,
+    message: err.message || 'Server Error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+
+// Connect to MongoDB
+const connectDB = async () => {
+  try {
+    const mongoUrl = process.env.MONGO_URL;
+    const dbName = process.env.DB_NAME;
+
+    if (!mongoUrl) {
+      throw new Error('MONGO_URL environment variable is not set');
+    }
+
+    const connectionString = dbName
+      ? `${mongoUrl}/${dbName}?retryWrites=true&w=majority`
+      : `${mongoUrl}?retryWrites=true&w=majority`;
+
+    const conn = await mongoose.connect(connectionString, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
+  } catch (error) {
+    console.error('MongoDB connection error:', error.message);
+    process.exit(1);
+  }
+};
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err, promise) => {
+  console.error('Unhandled Promise Rejection:', err);
+  console.error('Stack:', err.stack);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  console.error('Stack:', err.stack);
+  process.exit(1);
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      const address = server.address();
+      console.log(`✅ Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+      console.log(`✅ Health check: http://localhost:${PORT}/health`);
+      console.log(`✅ Server listening on: ${JSON.stringify(address)}`);
+    });
+
+    // Handle server errors
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use!`);
+        process.exit(1);
+      } else {
+        console.error('❌ Server error:', error);
+        throw error;
+      }
+    });
+
+    // Increase server timeout for large requests
+    server.timeout = 30000;
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM signal received: closing HTTP server');
+      server.close(() => {
+        console.log('HTTP server closed');
+        mongoose.connection.close(false, () => {
+          console.log('MongoDB connection closed');
+          process.exit(0);
+        });
+      });
+    });
+
+    process.on('SIGINT', () => {
+      console.log('SIGINT signal received: closing HTTP server');
+      server.close(() => {
+        console.log('HTTP server closed');
+        mongoose.connection.close(false, () => {
+          console.log('MongoDB connection closed');
+          process.exit(0);
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+module.exports = app;
+
