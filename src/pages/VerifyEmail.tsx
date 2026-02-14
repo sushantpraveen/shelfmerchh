@@ -1,110 +1,156 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { API_BASE_URL } from '@/config';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { authApi } from '@/lib/api';
 
-const VerifyEmail = () => {
-  const [searchParams] = useSearchParams();
+const VerifyEmail: React.FC = () => {
   const navigate = useNavigate();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('');
+  const { refreshUser } = useAuth();
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [step, setStep] = useState<'EMAIL' | 'OTP'>('EMAIL');
+  const [serverOtp, setServerOtp] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    const verifyEmail = async () => {
-      const token = searchParams.get('token');
+  const handleSendOtp = async () => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email');
+      return;
+    }
 
-      if (!token) {
-        setStatus('error');
-        setMessage('Invalid verification token');
-        setTimeout(() => {
-          navigate('/auth?error=invalid_token');
-        }, 3000);
-        return;
+    setIsLoading(true);
+    try {
+      const res = await authApi.sendEmailVerificationLater(email);
+      if (res.success) {
+        if (res.serverOtp) setServerOtp(res.serverOtp);
+        setStep('OTP');
+        toast.success('OTP sent to your email');
       }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send OTP');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      try {
-        // Call backend API to verify email
-        const response = await fetch(`${API_BASE_URL}/auth/verify-email?token=${token}`, {
-          method: 'GET',
-          credentials: 'include',
-        });
+  const handleVerifyOtp = async () => {
+    const otpValue = otp.join('');
+    if (otpValue.length < 6) {
+      toast.error('Please enter the 6-digit OTP');
+      return;
+    }
 
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-          setStatus('success');
-          setMessage('Email verified successfully! Redirecting to login...');
-          setTimeout(() => {
-            navigate('/auth?verified=true');
-          }, 2000);
-        } else {
-          setStatus('error');
-          setMessage(data.message || 'Verification failed. The token may be invalid or expired.');
-          setTimeout(() => {
-            const errorParam = data.error || 'verification_failed';
-            navigate(`/auth?error=${errorParam}`);
-          }, 3000);
-        }
-      } catch (error) {
-        console.error('Verification error:', error);
-        setStatus('error');
-        setMessage('An error occurred during verification. Please try again.');
-        setTimeout(() => {
-          navigate('/auth?error=verification_failed');
-        }, 3000);
+    setIsLoading(true);
+    try {
+      const res = await authApi.confirmEmailVerificationLater(otpValue, serverOtp);
+      if (res.success) {
+        toast.success('Email verified successfully!');
+        await refreshUser(); // Refresh user data to update verification status
+        navigate('/dashboard');
       }
-    };
+    } catch (err: any) {
+      toast.error(err.message || 'Invalid OTP');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    verifyEmail();
-  }, [searchParams, navigate]);
+  const handleOtpChange = (index: number, value: string) => {
+    if (isNaN(Number(value))) return;
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      nextInput?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-${index - 1}`);
+      prevInput?.focus();
+    }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
-      <div className="w-full max-w-md">
-        <div className="bg-card rounded-lg shadow-card p-8 text-center">
-          {status === 'loading' && (
-            <>
-              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-              <h2 className="text-2xl font-bold mb-2">Verifying your email...</h2>
-              <p className="text-muted-foreground">Please wait while we verify your email address.</p>
-            </>
-          )}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+        <h2 className="text-2xl font-bold text-center mb-6">Verify Your Email</h2>
 
-          {status === 'success' && (
-            <>
-              <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold mb-2 text-green-600">Email Verified!</h2>
-              <p className="text-muted-foreground mb-4">{message}</p>
-              <Alert className="border-green-500 bg-green-50">
-                <AlertDescription className="text-green-800">
-                  Your email has been successfully verified. You can now log in to your account.
-                </AlertDescription>
-              </Alert>
-            </>
-          )}
+        {step === 'EMAIL' ? (
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isLoading}
+              />
+            </div>
+            <button
+              onClick={handleSendOtp}
+              disabled={isLoading}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLoading ? 'Sending...' : 'Send OTP'}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 text-center">
+              Enter the 6-digit code sent to {email}
+            </p>
+            <div className="flex justify-center gap-2">
+              {otp.map((digit, index) => (
+                <input
+                  key={index}
+                  id={`otp-${index}`}
+                  type="text"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(index, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(index, e)}
+                  className="w-12 h-12 text-center text-xl border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isLoading}
+                />
+              ))}
+            </div>
+            <button
+              onClick={handleVerifyOtp}
+              disabled={isLoading}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLoading ? 'Verifying...' : 'Verify Email'}
+            </button>
+            <button
+              onClick={() => setStep('EMAIL')}
+              disabled={isLoading}
+              className="w-full text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              Change Email
+            </button>
+          </div>
+        )}
 
-          {status === 'error' && (
-            <>
-              <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold mb-2 text-red-600">Verification Failed</h2>
-              <p className="text-muted-foreground mb-4">{message}</p>
-              <Alert className="border-red-500 bg-red-50 mb-4">
-                <AlertDescription className="text-red-800">
-                  {message || 'The verification link is invalid or has expired. Please request a new verification email.'}
-                </AlertDescription>
-              </Alert>
-              <Button onClick={() => navigate('/auth')} variant="outline">
-                Go to Login
-              </Button>
-            </>
-          )}
-        </div>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="w-full mt-4 text-gray-600 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          Skip for now
+        </button>
       </div>
     </div>
   );
 };
 
 export default VerifyEmail;
-

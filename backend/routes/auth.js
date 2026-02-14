@@ -19,10 +19,10 @@ router.get('/google', (req, res, next) => {
   const host = req.get('host');
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
   const callbackURL = `${protocol}://${host}/api/auth/google/callback`;
-  
+
   console.log(`📡 Initiating Google OAuth with callback: ${callbackURL}`);
-  
-  passport.authenticate('google', { 
+
+  passport.authenticate('google', {
     scope: ['profile', 'email'],
     callbackURL: callbackURL
   })(req, res, next);
@@ -38,8 +38,8 @@ router.get(
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const callbackURL = `${protocol}://${host}/api/auth/google/callback`;
 
-    passport.authenticate('google', { 
-      session: false, 
+    passport.authenticate('google', {
+      session: false,
       failureRedirect: '/login',
       callbackURL: callbackURL
     })(req, res, next);
@@ -61,21 +61,21 @@ router.get(
       // Dynamic Frontend Redirect
       const host = req.get('host');
       const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-      
-      const frontendUrl = isLocal 
-        ? 'http://localhost:8080/auth' 
+
+      const frontendUrl = isLocal
+        ? 'http://localhost:8080/auth'
         : (process.env.CLIENT_URL || `https://${process.env.BASE_DOMAIN || 'shelfmerch.com'}/auth`);
 
       const redirectUrl = `${frontendUrl}?token=${response.token}&refreshToken=${response.refreshToken}`;
-      
+
       console.log(`🚀 Redirecting to: ${redirectUrl.split('?')[0]}...`);
       res.redirect(redirectUrl);
     } catch (err) {
       console.error('Google OAuth callback error:', err);
       const host = req.get('host');
       const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-      const frontendUrl = isLocal 
-        ? 'http://localhost:8080/auth' 
+      const frontendUrl = isLocal
+        ? 'http://localhost:8080/auth'
         : (process.env.CLIENT_URL || `https://${process.env.BASE_DOMAIN || 'shelfmerch.com'}/auth`);
       res.redirect(`${frontendUrl}?error=google_auth_failed`);
     }
@@ -225,7 +225,7 @@ router.post(
 
       // Generate verification token
       const emailVerificationToken = crypto.randomBytes(32).toString('hex');
-      const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      const emailVerificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
       // Create user
       console.log('Creating user with:', { name, email, role: userRole });
@@ -236,7 +236,7 @@ router.post(
         role: userRole,
         isEmailVerified: false,
         emailVerificationToken: emailVerificationToken,
-        verificationTokenExpiry: verificationTokenExpiry
+        emailVerificationTokenExpiry: emailVerificationTokenExpiry
       });
       console.log('User created successfully:', user._id);
 
@@ -390,8 +390,8 @@ router.get('/verify-email', async (req, res) => {
     // Find user with this token and check expiry
     const user = await User.findOne({
       emailVerificationToken: token,
-      verificationTokenExpiry: { $gt: Date.now() }
-    }).select('+emailVerificationToken +verificationTokenExpiry');
+      emailVerificationTokenExpiry: { $gt: Date.now() }
+    }).select('+emailVerificationToken +emailVerificationTokenExpiry');
 
     if (!user) {
       return res.status(400).json({
@@ -404,7 +404,7 @@ router.get('/verify-email', async (req, res) => {
     // Mark as verified and clear token
     user.isEmailVerified = true;
     user.emailVerificationToken = undefined;
-    user.verificationTokenExpiry = undefined;
+    user.emailVerificationTokenExpiry = undefined;
     await user.save();
 
     // Return success response
@@ -484,8 +484,10 @@ router.get('/me', protect, async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
         role: user.role,
         isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
         createdAt: user.createdAt,
         lastLogin: user.lastLogin
       }
@@ -928,8 +930,8 @@ router.post('/login/otp/init', async (req, res) => {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
       if (user) {
-        user.loginOtp = otp;
-        user.loginOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+        user.emailVerificationToken = otp;
+        user.emailVerificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
         await user.save({ validateBeforeSave: false });
         await sendEmailOTP(user.email, otp, user.name, 'login');
       } else {
@@ -961,8 +963,8 @@ router.post('/login/otp/init', async (req, res) => {
 
         // Store OTP for verification (for both existing and new users)
         if (user) {
-          user.loginOtp = result.otp; // Store the actual OTP
-          user.loginOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+          user.phoneVerificationToken = result.otp; // Store the actual OTP
+          user.phoneVerificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
           await user.save({ validateBeforeSave: false });
         }
 
@@ -999,9 +1001,9 @@ router.post('/login/otp/verify', async (req, res) => {
     if (isEmail) {
       user = await User.findOne({
         email: identifier.toLowerCase(),
-        loginOtp: otp,
-        loginOtpExpires: { $gt: Date.now() }
-      }).select('+loginOtp +loginOtpExpires');
+        emailVerificationToken: otp,
+        emailVerificationTokenExpiry: { $gt: Date.now() }
+      }).select('+emailVerificationToken +emailVerificationTokenExpiry');
 
       // If user not found but we have a new user serverOtp verification
       if (!user && serverOtp && otp === serverOtp) {
@@ -1015,18 +1017,51 @@ router.post('/login/otp/verify', async (req, res) => {
         });
       }
     } else {
-      // Phone verification - check stored OTP in database
-      user = await User.findOne({
-        phone: identifier,
-        loginOtp: otp,
-        loginOtpExpires: { $gt: Date.now() }
-      }).select('+loginOtp +loginOtpExpires');
+      // Phone verification - Use MSG91 API to verify
+      const phone10 = identifier.replace(/\D/g, ''); // Extract 10 digits
 
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid or expired OTP'
-        });
+      // Check if user exists
+      const existingUser = await User.findOne({ phone: identifier });
+
+      if (existingUser) {
+        // Existing user logging in - verify OTP via MSG91
+        try {
+          const verificationResult = await verifyPhoneOTP(phone10, otp);
+
+          if (!verificationResult.success) {
+            return res.status(400).json({
+              success: false,
+              message: verificationResult.message || 'Invalid or expired OTP'
+            });
+          }
+
+          // OTP verified successfully
+          user = existingUser;
+        } catch (error) {
+          console.error('Phone OTP verification error:', error);
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid or expired OTP'
+          });
+        }
+      } else {
+        // New user signup - verify against serverOtp
+        if (serverOtp && otp === serverOtp) {
+          // Create new phone-based user
+          user = await User.create({
+            name: `User ${identifier.slice(-4)}`,
+            phone: identifier,
+            isPhoneVerified: true,
+            isOtpUser: true,
+            role: 'merchant'
+          });
+        } else {
+          // OTP doesn't match
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid or expired OTP'
+          });
+        }
       }
     }
 
@@ -1035,9 +1070,11 @@ router.post('/login/otp/verify', async (req, res) => {
     }
 
     // Clear OTP (if it was an existing user logging in with OTP)
-    if (user.loginOtp) {
-      user.loginOtp = undefined;
-      user.loginOtpExpires = undefined;
+    if (user.emailVerificationToken || user.phoneVerificationToken) {
+      user.emailVerificationToken = undefined;
+      user.emailVerificationTokenExpiry = undefined;
+      user.phoneVerificationToken = undefined;
+      user.phoneVerificationTokenExpiry = undefined;
     }
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
@@ -1083,22 +1120,199 @@ router.post('/signup/otp/complete', async (req, res) => {
   try {
     const { name, phone, email, password, otp, serverOtp } = req.body;
     if (otp !== serverOtp) return res.status(400).json({ success: false, message: 'Invalid verification code' });
-    const existingUser = await User.findOne({ $or: [{ email: email.toLowerCase() }, { phone }] });
-    if (existingUser) return res.status(400).json({ success: false, message: 'Account already exists' });
 
-    const user = await User.create({
+    // Build query to check for existing users
+    const orConditions = [];
+    if (email) orConditions.push({ email: email.toLowerCase() });
+    if (phone) orConditions.push({ phone });
+
+    if (orConditions.length > 0) {
+      const existingUser = await User.findOne({ $or: orConditions });
+      if (existingUser) return res.status(400).json({ success: false, message: 'Account already exists' });
+    }
+
+    // Build user object with only provided fields
+    const userData = {
       name,
-      email: email.toLowerCase(),
-      phone,
-      password: password, // Only set if provided
-      isEmailVerified: true,
       isOtpUser: !password,
       role: 'merchant'
-    });
+    };
+
+    if (email) {
+      userData.email = email.toLowerCase();
+      userData.isEmailVerified = true;
+    }
+    if (phone) {
+      userData.phone = phone;
+      userData.isPhoneVerified = true;
+    }
+    if (password) {
+      userData.password = password;
+    }
+
+    const user = await User.create(userData);
     await sendTokenResponse(user, 201, res);
   } catch (error) {
     console.error('Signup complete error:', error);
     res.status(500).json({ success: false, message: 'Server error during signup' });
+  }
+});
+
+// @route   POST /api/auth/verify-email-later
+// @desc    Send OTP to email for post-registration verification
+//@access  Private
+router.post('/verify-email-later', protect, async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Valid email is required' });
+    }
+
+    // Check if email is already taken by another user
+    const existingUser = await User.findOne({ email: email.toLowerCase(), _id: { $ne: req.user.id } });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'Email already in use' });
+    }
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Update user with email and OTP
+    const user = await User.findById(req.user.id);
+    user.email = email.toLowerCase();
+    user.emailVerificationToken = otp;
+    user.emailVerificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    // Send OTP email
+    await sendEmailOTP(email, otp, user.name, 'verification');
+
+    res.json({
+      success: true,
+      message: 'OTP sent to email',
+      serverOtp: otp // For development/testing
+    });
+  } catch (err) {
+    console.error('Verify email later error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/auth/verify-email-later/confirm
+// @desc    Verify email OTP and mark as verified
+// @access  Private
+router.post('/verify-email-later/confirm', protect, async (req, res) => {
+  try {
+    const { otp, serverOtp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({ success: false, message: 'OTP is required' });
+    }
+
+    const user = await User.findById(req.user.id).select('+emailVerificationToken +emailVerificationTokenExpiry');
+
+    // Verify OTP
+    const isValid = (user.emailVerificationToken === otp && user.emailVerificationTokenExpiry > Date.now()) || otp === serverOtp;
+
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+
+    // Mark email as verified
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationTokenExpiry = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully'
+    });
+  } catch (err) {
+    console.error('Confirm email error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/auth/verify-phone-later
+// @desc    Send OTP to phone for post-registration verification
+// @access  Private
+router.post('/verify-phone-later', protect, async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone || !/^[6-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({ success: false, message: 'Valid 10-digit phone number is required' });
+    }
+
+    // Check if phone is already taken by another user
+    const existingUser = await User.findOne({ phone, _id: { $ne: req.user.id } });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'Phone number already in use' });
+    }
+
+    // Send OTP via MSG91
+    const result = await sendPhoneOTP(phone);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.message || 'Failed to send OTP'
+      });
+    }
+
+    // Update user with phone and OTP
+    const user = await User.findById(req.user.id);
+    user.phone = phone;
+    user.phoneVerificationToken = result.otp;
+    user.phoneVerificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      success: true,
+      message: 'OTP sent to your phone',
+      serverOtp: result.otp // For development/testing
+    });
+  } catch (err) {
+    console.error('Verify phone later error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/auth/verify-phone-later/confirm
+// @desc    Verify phone OTP and mark as verified
+// @access  Private
+router.post('/verify-phone-later/confirm', protect, async (req, res) => {
+  try {
+    const { otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({ success: false, message: 'OTP is required' });
+    }
+
+    const user = await User.findById(req.user.id).select('+phoneVerificationToken +phoneVerificationTokenExpiry');
+
+    // Verify OTP
+    const isValid = user.phoneVerificationToken === otp && user.phoneVerificationTokenExpiry > Date.now();
+
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+
+    // Mark phone as verified
+    user.isPhoneVerified = true;
+    user.phoneVerificationToken = undefined;
+    user.phoneVerificationTokenExpiry = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      success: true,
+      message: 'Phone verified successfully'
+    });
+  } catch (err) {
+    console.error('Confirm phone error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 

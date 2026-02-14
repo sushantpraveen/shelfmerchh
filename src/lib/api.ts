@@ -1169,7 +1169,10 @@ export const authApi = {
         id: string;
         name: string;
         email: string;
+        phone?: string;
         role: string;
+        isEmailVerified?: boolean;
+        isPhoneVerified?: boolean;
         createdAt: string;
       };
       token: string;
@@ -1205,7 +1208,10 @@ export const authApi = {
         id: string;
         name: string;
         email: string;
+        phone?: string;
         role: string;
+        isEmailVerified?: boolean;
+        isPhoneVerified?: boolean;
         createdAt: string;
         lastLogin?: string;
       };
@@ -1341,7 +1347,7 @@ export const authApi = {
     });
   },
 
-  completeSignupOtp: async (data: { name: string, phone: string, email: string, password?: string, otp?: string, serverOtp?: string }) => {
+  completeSignupOtp: async (data: { name: string, phone?: string, email?: string, password?: string, otp?: string, serverOtp?: string }) => {
     return apiRequest<{
       success: boolean;
       user: any;
@@ -1350,6 +1356,49 @@ export const authApi = {
     }>('/auth/signup/otp/complete', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  // Post-registration verification
+  sendEmailVerificationLater: async (email: string) => {
+    return apiRequest<{
+      success: boolean;
+      message: string;
+      serverOtp?: string;
+    }>('/auth/verify-email-later', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  confirmEmailVerificationLater: async (otp: string, serverOtp?: string) => {
+    return apiRequest<{
+      success: boolean;
+      message: string;
+    }>('/auth/verify-email-later/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ otp, serverOtp }),
+    });
+  },
+
+  sendPhoneVerificationLater: async (phone: string) => {
+    return apiRequest<{
+      success: boolean;
+      message: string;
+      serverOtp?: string;
+    }>('/auth/verify-phone-later', {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    });
+  },
+
+  confirmPhoneVerificationLater: async (otp: string) => {
+    return apiRequest<{
+      success: boolean;
+      message: string;
+    }>('/auth/verify-phone-later/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ otp }),
     });
   },
 

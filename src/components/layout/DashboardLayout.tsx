@@ -26,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import NotificationBell from '@/components/layout/NotificationBell';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -63,9 +64,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         <Link to="/" className="flex items-center space-x-2">
           <img src={logo} alt="ShelfMerch" className="h-6 w-auto" />
         </Link>
-        <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(true)}>
-          <Menu className="h-6 w-6" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <NotificationBell tooltipSide="bottom" />
+          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(true)}>
+            <Menu className="h-6 w-6" />
+          </Button>
+        </div>
       </header>
 
       {/* Backdrop for mobile */}
@@ -232,7 +236,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
 
         <div className="absolute bottom-6 left-6 right-6">
           <div className="border-t pt-4 space-y-2">
-            <p className="text-sm text-muted-foreground">Signed in as</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Signed in as</p>
+              <NotificationBell tooltipSide="top" />
+            </div>
             <p className="text-sm font-medium truncate">{user?.email}</p>
             <Button
               variant="ghost"
