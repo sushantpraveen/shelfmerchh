@@ -252,6 +252,71 @@ const DesignEditor: React.FC = () => {
     }
   }, [selectedIds, isMobile]);
 
+  // Touch gesture state for mobile pan/zoom
+  const touchStateRef = useRef({
+    distance: 0,
+    lastPos: { x: 0, y: 0 },
+    isPinching: false,
+    isPanning: false
+  });
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!isMobile) return;
+
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2));
+
+      touchStateRef.current = {
+        ...touchStateRef.current,
+        distance: dist,
+        isPinching: true,
+        isPanning: false
+      };
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0];
+      touchStateRef.current = {
+        ...touchStateRef.current,
+        lastPos: { x: t.clientX, y: t.clientY },
+        isPinching: false,
+        isPanning: true
+      };
+    }
+  }, [isMobile]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isMobile) return;
+
+    if (e.touches.length === 2 && touchStateRef.current.isPinching) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2));
+
+      const scaleChange = dist / touchStateRef.current.distance;
+      if (Math.abs(scaleChange - 1) > 0.01) {
+        setZoom(prev => Math.min(500, Math.max(10, prev * scaleChange)));
+        touchStateRef.current.distance = dist;
+      }
+    } else if (e.touches.length === 1 && touchStateRef.current.isPanning) {
+      const t = e.touches[0];
+      const dx = t.clientX - touchStateRef.current.lastPos.x;
+      const dy = t.clientY - touchStateRef.current.lastPos.y;
+
+      setStagePos(prev => ({
+        x: prev.x + dx,
+        y: prev.y + dy
+      }));
+
+      touchStateRef.current.lastPos = { x: t.clientX, y: t.clientY };
+    }
+  }, [isMobile, zoom]);
+
+  const handleTouchEnd = useCallback(() => {
+    touchStateRef.current.isPinching = false;
+    touchStateRef.current.isPanning = false;
+  }, []);
+
   // Use ref to track selected placeholder for callback
   const selectedPlaceholderIdRef = useRef<string | null>(null);
 
@@ -1534,10 +1599,44 @@ const DesignEditor: React.FC = () => {
   };
 
   const fitToScreen = () => {
-    // Implementation
-    setZoom(100);
+    // Better fit to screen logic
+    const container = webglCanvasRef.current?.parentElement;
+    if (container) {
+      const padding = 20;
+      const availableWidth = container.clientWidth - (padding * 2);
+      const availableHeight = container.clientHeight - (padding * 2);
+
+      const scaleX = availableWidth / canvasWidth;
+      const scaleY = availableHeight / canvasHeight;
+      const fitZoom = Math.min(scaleX, scaleY, 1.0) * 100;
+
+      if (isMobile) {
+        setZoom(75); // Fixed 75% for mobile as requested
+      } else {
+        setZoom(Math.floor(fitZoom));
+      }
+    } else {
+      setZoom(isMobile ? 75 : 100);
+    }
     setStagePos({ x: 0, y: 0 });
   };
+
+  // Fit to screen on mount or when product finishes loading
+  useEffect(() => {
+    if (!isLoadingProduct && product) {
+      // Small delay to ensure container dims are ready
+      const timer = setTimeout(() => {
+        fitToScreen();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoadingProduct, product]);
+
+  // Fit to screen on window resize
+  useEffect(() => {
+    window.addEventListener('resize', fitToScreen);
+    return () => window.removeEventListener('resize', fitToScreen);
+  }, [fitToScreen]);
 
   // Add image to canvas from URL
   const addImageToCanvas = useCallback((imageUrl: string) => {
@@ -2637,6 +2736,36 @@ const DesignEditor: React.FC = () => {
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        @keyframes pulse-ring {
+          0% { transform: scale(0.8); opacity: 0.5; }
+          100% { transform: scale(1.6); opacity: 0; }
+        }
+        
+        @keyframes glow {
+          0%, 100% { box-shadow: 0 0 15px 2px rgba(var(--primary), 0.3); }
+          50% { box-shadow: 0 0 25px 5px rgba(var(--primary), 0.5); }
+        }
+        
+        .cta-pulse {
+          position: relative;
+        }
+        
+        .cta-pulse::before {
+          content: '';
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          background: hsl(var(--primary));
+          border-radius: 50%;
+          z-index: -1;
+          animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        
+        .stop-pulse::before {
+          animation: none;
+          display: none;
+        }
       `}</style>
       {/* Top Bar */}
       <div className="h-[60px] border-b flex items-center justify-between px-4 bg-background z-20">
@@ -2962,7 +3091,12 @@ const DesignEditor: React.FC = () => {
         )}
 
         {/* Main Canvas Area - Always WebGL with Konva Overlay */}
-        <div className="flex-1 min-h-0 flex flex-col items-center bg-muted/30 relative overflow-y-auto">
+        <div
+          className="flex-1 min-h-0 flex flex-col items-center bg-muted/30 relative overflow-hidden touch-none"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           {isLoadingProduct ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -2974,10 +3108,12 @@ const DesignEditor: React.FC = () => {
             <div className="relative w-full h-full flex items-center justify-center">
               <div
                 ref={webglCanvasRef}
-                className="relative bg-white shadow-lg"
+                className="relative bg-white shadow-lg overflow-hidden flex-shrink-0"
                 style={{
-                  transform: `scale(${zoom / 100})`,
-                  transformOrigin: 'center'
+                  width: `${canvasWidth}px`,
+                  height: `${canvasHeight}px`,
+                  transform: `translate(${stagePos.x}px, ${stagePos.y}px) scale(${zoom / 100})`,
+                  transformOrigin: 'center',
                 }}
               >
                 {previewMode && (() => {
@@ -3639,9 +3775,9 @@ const DesignEditor: React.FC = () => {
       {!previewMode && (
         <div className={`${isMobile ? 'h-[75px] pb-2' : 'h-[50px]'} border-t flex items-center justify-between px-4 bg-background z-30`}>
           {isMobile ? (
-            <div className="w-full flex items-center justify-between relative px-2">
+            <div className="w-full flex items-center justify-around relative px-4">
               {/* Mobile Left Group */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center opacity-80">
                 <button
                   onClick={() => {
                     setRightPanelTab('product');
@@ -3649,33 +3785,43 @@ const DesignEditor: React.FC = () => {
                     setShowLeftPanel(false);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`flex flex-col items-center gap-1 group transition-transform active:scale-95 ${rightPanelTab === 'product' && showRightPanel ? 'text-primary' : 'text-muted-foreground'}`}
+                  className={`flex flex-col items-center gap-1.5 group transition-all active:scale-95 ${rightPanelTab === 'product' && showRightPanel ? 'text-primary scale-105' : 'text-muted-foreground'}`}
                 >
-                  <div className={`p-1 rounded-md ${rightPanelTab === 'product' && showRightPanel ? 'bg-primary/10' : 'group-active:bg-muted'}`}>
-                    <Package className="w-6 h-6" />
+                  <div className={`p-1.5 rounded-md ${rightPanelTab === 'product' && showRightPanel ? 'bg-primary/10' : 'group-active:bg-muted'}`}>
+                    <Package className="w-7 h-7" />
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-tight">Products</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wide">Products</span>
                 </button>
               </div>
 
-              {/* Floating Plus Button */}
-              <div className="absolute left-1/2 -translate-x-1/2 -top-10">
-                <Button
-                  size="icon"
-                  onClick={() => {
-                    setIsMobileMenuOpen(true);
-                    setMobileToolStage('menu');
-                    setShowRightPanel(false);
-                    setShowLeftPanel(false);
-                  }}
-                  className="w-16 h-16 rounded-full shadow-2xl bg-primary hover:bg-primary/95 border-4 border-background flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-                >
-                  <Plus className="w-9 h-9 text-primary-foreground stroke-[2.5]" />
-                </Button>
+              {/* Space for the Floating Plus Button */}
+              <div className="w-20" />
+
+              {/* Floating Plus Button (Absolute context) */}
+              <div className="absolute left-1/2 -translate-x-1/2 -top-12">
+                <div className={`cta-pulse ${isMobileMenuOpen ? 'stop-pulse' : ''}`}>
+                  <Button
+                    size="icon"
+                    onClick={() => {
+                      setIsMobileMenuOpen(true);
+                      setMobileToolStage('menu');
+                      setShowRightPanel(false);
+                      setShowLeftPanel(false);
+                    }}
+                    className="w-18 h-18 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-primary hover:bg-primary/95 border-4 border-background flex items-center justify-center transition-all hover:scale-110 active:scale-90 z-20"
+                    style={{
+                      width: '72px',
+                      height: '72px',
+                      boxShadow: '0 10px 25px -5px rgba(var(--primary), 0.4), 0 8px 10px -6px rgba(var(--primary), 0.4)'
+                    }}
+                  >
+                    <Plus className="w-10 h-10 text-primary-foreground stroke-[3]" />
+                  </Button>
+                </div>
               </div>
 
               {/* Mobile Right Group */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center opacity-80">
                 <button
                   onClick={() => {
                     setRightPanelTab('layers');
@@ -3683,12 +3829,12 @@ const DesignEditor: React.FC = () => {
                     setShowLeftPanel(false);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`flex flex-col items-center gap-1 group transition-transform active:scale-95 ${rightPanelTab === 'layers' && showRightPanel ? 'text-primary' : 'text-muted-foreground'}`}
+                  className={`flex flex-col items-center gap-1.5 group transition-all active:scale-95 ${rightPanelTab === 'layers' && showRightPanel ? 'text-primary scale-105' : 'text-muted-foreground'}`}
                 >
-                  <div className={`p-1 rounded-md ${rightPanelTab === 'layers' && showRightPanel ? 'bg-primary/10' : 'group-active:bg-muted'}`}>
-                    <Layers className="w-6 h-6" />
+                  <div className={`p-1.5 rounded-md ${rightPanelTab === 'layers' && showRightPanel ? 'bg-primary/10' : 'group-active:bg-muted'}`}>
+                    <Layers className="w-7 h-7" />
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-tight">Layers</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wide">Layers</span>
                 </button>
               </div>
             </div>
