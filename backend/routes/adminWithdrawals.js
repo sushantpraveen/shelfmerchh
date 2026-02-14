@@ -61,6 +61,7 @@ router.get('/', protect, authorize('superadmin'), async (req, res) => {
             rejectionReason: r.rejectionReason,
             payoutMethod: r.payoutMethod,
             payoutReference: r.payoutReference,
+            paymentScreenshotUrl: r.paymentScreenshotUrl,
             payoutNotes: r.payoutNotes,
         }));
 
@@ -211,22 +212,38 @@ router.post('/:id/reject', protect, authorize('superadmin'), async (req, res) =>
 // @route   POST /api/admin/withdrawals/:id/mark-paid
 // @desc    Mark a withdrawal request as paid (after manual payout)
 // @access  Private/Superadmin
-router.post('/:id/mark-paid', protect, authorize('superadmin'), async (req, res) => {
+const multer = require('multer');
+const { uploadToS3 } = require('../utils/s3Upload');
+
+// Configure multer for memory storage
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed'), false);
+        }
+    },
+});
+
+router.post('/:id/mark-paid', protect, authorize('superadmin'), upload.single('screenshot'), async (req, res) => {
     try {
         const { payoutReference, notes } = req.body;
+        let paymentScreenshotUrl = null;
 
-        if (!payoutReference || payoutReference.trim().length < 3) {
-            return res.status(400).json({
-                success: false,
-                message: 'Payout reference (UTR) is required',
-            });
+        if (req.file) {
+            console.log(`📤 Uploading payment screenshot for withdrawal ${req.params.id}`);
+            paymentScreenshotUrl = await uploadToS3(req.file.buffer, req.file.originalname, 'payout-proofs');
         }
 
         const request = await withdrawalService.markAsPaid(
             req.params.id,
             req.user.id,
-            payoutReference,
-            notes || ''
+            payoutReference ? payoutReference.trim() : undefined,
+            notes ? notes.trim() : '',
+            paymentScreenshotUrl
         );
 
         console.log(
@@ -240,6 +257,7 @@ router.post('/:id/mark-paid', protect, authorize('superadmin'), async (req, res)
                 id: request._id,
                 status: request.status,
                 payoutReference: request.payoutReference,
+                paymentScreenshotUrl: request.paymentScreenshotUrl,
                 paidAt: request.paidAt,
             },
         });

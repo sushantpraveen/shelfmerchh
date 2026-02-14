@@ -487,7 +487,8 @@ router.get('/me', protect, async (req, res) => {
         role: user.role,
         isEmailVerified: user.isEmailVerified,
         createdAt: user.createdAt,
-        lastLogin: user.lastLogin
+        lastLogin: user.lastLogin,
+        upiId: user.upiId
       }
     });
   } catch (error) {
@@ -841,12 +842,17 @@ router.put(
   '/update-profile',
   protect,
   [
-    body('name')
+      body('name')
       .trim()
       .notEmpty()
       .withMessage('Name is required')
       .isLength({ min: 2, max: 50 })
       .withMessage('Name must be between 2 and 50 characters'),
+    body('upiId')
+      .optional()
+      .trim()
+      .isLength({ max: 100 })
+      .withMessage('UPI ID cannot be more than 100 characters'),
   ],
   async (req, res) => {
     try {
@@ -859,7 +865,7 @@ router.put(
         });
       }
 
-      const { name } = req.body;
+      const { name, upiId } = req.body;
 
       // Update user
       const user = await User.findById(req.user.id);
@@ -871,6 +877,9 @@ router.put(
       }
 
       user.name = name.trim();
+      if (upiId !== undefined) {
+        user.upiId = upiId.trim();
+      }
       await user.save({ validateBeforeSave: false });
 
       res.status(200).json({
@@ -880,7 +889,8 @@ router.put(
           id: user._id,
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          upiId: user.upiId
         }
       });
     } catch (error) {
@@ -1099,6 +1109,54 @@ router.post('/signup/otp/complete', async (req, res) => {
   } catch (error) {
     console.error('Signup complete error:', error);
     res.status(500).json({ success: false, message: 'Server error during signup' });
+  }
+});
+
+// @route   GET /api/auth/merchants
+// @desc    Get all merchants (Superadmin only)
+// @access  Private/Superadmin
+router.get('/merchants', protect, authorize('superadmin'), async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const startIndex = (page - 1) * limit;
+    const search = req.query.search ? req.query.search.trim() : '';
+
+    let query = { role: 'merchant' };
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const total = await User.countDocuments(query);
+    const merchants = await User.find(query)
+      .select('name email phone upiId createdAt lastLogin isActive')
+      .skip(startIndex)
+      .limit(limit)
+      .sort({ createdAt: -1 });
+
+    const pagination = {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit)
+    };
+
+    res.status(200).json({
+      success: true,
+      count: merchants.length,
+      pagination,
+      data: merchants
+    });
+  } catch (error) {
+    console.error('Get merchants error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching merchants'
+    });
   }
 });
 

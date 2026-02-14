@@ -135,9 +135,9 @@ const WalletTransactions = () => {
             <div className="max-w-4xl mx-auto">
                 <div className="mb-8">
                     <Button variant="ghost" asChild className="mb-4 pl-0 hover:bg-transparent hover:text-primary">
-                        <Link to="/invoices" className="flex items-center gap-2">
+                        <Link to="/wallet" className="flex items-center gap-2">
                             <ArrowLeft className="h-4 w-4" />
-                            Back to Wallet & Invoices
+                            Back to Wallet
                         </Link>
                     </Button>
                     <div className="flex justify-between items-end">

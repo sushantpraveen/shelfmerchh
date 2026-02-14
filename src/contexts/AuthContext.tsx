@@ -11,6 +11,7 @@ export interface User {
   role: UserRole;
   createdAt: string;
   lastLogin?: string;
+  upiId?: string;
 }
 
 interface AuthContextType {
@@ -49,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: response.user.role as UserRole,
               createdAt: response.user.createdAt,
               lastLogin: response.user.lastLogin,
+              upiId: response.user.upiId
             });
           }
         }
@@ -78,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: response.user.name,
           role: response.user.role as UserRole,
           createdAt: response.user.createdAt,
+          upiId: response.user.upiId
         });
       } else {
         throw new Error('Login failed');
@@ -120,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: response.user.name,
           role: response.user.role as UserRole,
           createdAt: response.user.createdAt,
+          upiId: response.user.upiId
         });
       } else {
         throw new Error('Verification failed');
@@ -142,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: response.user.name,
           role: response.user.role as UserRole,
           createdAt: response.user.createdAt,
+          upiId: response.user.upiId
         });
       } else {
         throw new Error('Account creation failed');
@@ -176,6 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: response.user.role as UserRole,
           createdAt: response.user.createdAt,
           lastLogin: response.user.lastLogin,
+          upiId: response.user.upiId
         });
       }
     } catch (error) {

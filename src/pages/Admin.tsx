@@ -80,9 +80,11 @@ import {
   ChevronRight,
   Wallet,
   Shield,
-  Plus
+  Plus,
+  Banknote
 } from 'lucide-react';
 import { WalletManagement } from '@/components/admin/WalletManagement';
+import { WithdrawalsManagement } from '@/components/admin/WithdrawalsManagement';
 import { InvoiceManagement } from '@/components/admin/InvoiceManagement';
 import { AuditLogs } from '@/components/admin/AuditLogs';
 import { PayoutManagement } from '@/components/admin/PayoutManagement';
@@ -140,6 +142,14 @@ const Admin = () => {
   const [storesSortOrder, setStoresSortOrder] = useState<'asc' | 'desc'>('desc');
   const [suspendingStoreId, setSuspendingStoreId] = useState<string | null>(null);
   const [isSuspendingStore, setIsSuspendingStore] = useState(false);
+
+  // Merchants state
+  const [merchants, setMerchants] = useState<any[]>([]);
+  const [isLoadingMerchants, setIsLoadingMerchants] = useState(false);
+  const [merchantsSearchQuery, setMerchantsSearchQuery] = useState('');
+  const [merchantsPage, setMerchantsPage] = useState(1);
+  const [merchantsTotal, setMerchantsTotal] = useState(0);
+  const [merchantsLimit] = useState(10);
 
   // Admin sees ALL data across platform (stores/products from localStorage snapshot)
   const allStores = JSON.parse(localStorage.getItem('shelfmerch_all_stores') || '[]') as StoreType[];
@@ -249,7 +259,7 @@ const Admin = () => {
           const userId = wallet.userId;
           const userStores = storesByUser[userId] || [];
           const revenue = wallet.balancePaise || 0;
-          
+
           return {
             userId,
             userName: wallet.userName || 'Unknown',
@@ -339,7 +349,7 @@ const Admin = () => {
       filtered = filtered.filter((order) => {
         // Search by customer email
         const emailMatch = order.customerEmail?.toLowerCase().includes(query);
-        
+
         // Search by store name (from order.storeId)
         let storeName = '';
         if (order.storeId && typeof order.storeId === 'object' && order.storeId !== null) {
@@ -361,7 +371,7 @@ const Admin = () => {
       filtered.sort((a, b) => {
         const amountA = a.total !== undefined ? a.total : 0;
         const amountB = b.total !== undefined ? b.total : 0;
-        
+
         if (ordersAmountSort === 'low-high') {
           return amountA - amountB;
         } else if (ordersAmountSort === 'high-low') {
@@ -396,7 +406,7 @@ const Admin = () => {
         }
 
         const comparison = compareA.localeCompare(compareB);
-        
+
         if (ordersAlphabeticalSort === 'store-za' || ordersAlphabeticalSort === 'email-za') {
           return -comparison; // Reverse for Z-A
         }
@@ -593,19 +603,20 @@ const Admin = () => {
         const response = await storeApi.update(suspendingStoreId, {
           // Note: This may need to be adjusted based on actual API structure
         });
-      if (response.success) {
-        toast.success(response.message || 'Store status updated successfully');
-        setSuspendingStoreId(null);
-        // Reload stores list
-        const updatedResponse = await storeApi.listAllStores({
-          page: storesPage,
-          limit: storesLimit,
-          search: searchQuery,
-          sortBy: storesSortBy,
-          sortOrder: storesSortOrder
-        });
-        if (updatedResponse.success) {
-          setStores(updatedResponse.data || []);
+        if (response.success) {
+          toast.success(response.message || 'Store status updated successfully');
+          setSuspendingStoreId(null);
+          // Reload stores list
+          const updatedResponse = await storeApi.listAllStores({
+            page: storesPage,
+            limit: storesLimit,
+            search: searchQuery,
+            sortBy: storesSortBy,
+            sortOrder: storesSortOrder
+          });
+          if (updatedResponse.success) {
+            setStores(updatedResponse.data || []);
+            setStoresTotal(updatedResponse.pagination.total);
           }
         }
       }
@@ -615,6 +626,196 @@ const Admin = () => {
       setIsSuspendingStore(false);
     }
   };
+
+  // Fetch merchants from backend
+  const fetchMerchants = useCallback(async () => {
+    if (activeTab !== 'merchants' || user?.role !== 'superadmin') {
+      return;
+    }
+
+    setIsLoadingMerchants(true);
+    try {
+      const { authApi } = await import('@/lib/api');
+      const response = await authApi.getMerchants({
+        page: merchantsPage,
+        limit: merchantsLimit,
+        search: merchantsSearchQuery.trim() || undefined
+      });
+
+      if (response && response.success) {
+        setMerchants(response.data || []);
+        setMerchantsTotal(response.pagination.total || 0);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch merchants:', error);
+      toast.error(error.message || 'Failed to load merchants');
+    } finally {
+      setIsLoadingMerchants(false);
+    }
+  }, [activeTab, user?.role, merchantsPage, merchantsSearchQuery, merchantsLimit]);
+
+  useEffect(() => {
+    if (activeTab === 'merchants') {
+      const timeoutId = setTimeout(() => {
+        fetchMerchants();
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [activeTab, fetchMerchants, merchantsPage, merchantsSearchQuery]);
+
+  const MerchantsTab = () => (
+    <>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Merchants</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage and view all registered merchants on the platform
+          </p>
+        </div>
+        <Button className="gap-2">
+          <Download className="h-4 w-4" />
+          Export Merchants
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>All Merchants ({merchantsTotal})</CardTitle>
+              <CardDescription>Comprehensive list of merchants and their details</CardDescription>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or email..."
+                className="pl-9 w-64"
+                value={merchantsSearchQuery}
+                onChange={(e) => {
+                  setMerchantsSearchQuery(e.target.value);
+                  setMerchantsPage(1);
+                }}
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoadingMerchants && merchants.length === 0 ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Merchant</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>UPI ID</TableHead>
+                      <TableHead>Joined</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {merchants.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          No merchants found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      merchants.map((merchant) => (
+                        <TableRow key={merchant._id}>
+                          <TableCell>
+                            <div className="font-medium">{merchant.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {merchant.email}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {merchant.phone || '-'}
+                          </TableCell>
+                          <TableCell>
+                            {merchant.upiId ? (
+                              <code className="bg-muted px-1 rounded text-xs">
+                                {merchant.upiId}
+                              </code>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {merchant.createdAt ? new Date(merchant.createdAt).toLocaleDateString() : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={merchant.isActive ? "secondary" : "destructive"}
+                              className={merchant.isActive ? "bg-green-500/10 text-green-500" : ""}
+                            >
+                              {merchant.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {merchantsTotal > merchantsLimit && (
+                <div className="mt-4">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={() => setMerchantsPage(p => Math.max(1, p - 1))}
+                          className={merchantsPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        />
+                      </PaginationItem>
+
+                      {Array.from({ length: Math.min(5, Math.ceil(merchantsTotal / merchantsLimit)) }, (_, i) => {
+                        const totalPages = Math.ceil(merchantsTotal / merchantsLimit);
+                        let startPage = Math.max(1, merchantsPage - 2);
+                        if (startPage + 4 > totalPages) {
+                          startPage = Math.max(1, totalPages - 4);
+                        }
+                        const p = startPage + i;
+                        if (p > totalPages) return null;
+
+                        return (
+                          <PaginationItem key={p}>
+                            <PaginationLink
+                              isActive={merchantsPage === p}
+                              onClick={() => setMerchantsPage(p)}
+                              className="cursor-pointer"
+                            >
+                              {p}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      })}
+
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={() => setMerchantsPage(p => Math.min(Math.ceil(merchantsTotal / merchantsLimit), p + 1))}
+                          className={merchantsPage >= Math.ceil(merchantsTotal / merchantsLimit) ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
 
   const stats = [
     {
@@ -845,6 +1046,17 @@ const Admin = () => {
               <FileText className="mr-2 h-4 w-4" />
               Invoices
             </Button>
+            <Button
+              variant={activeTab === 'withdrawals' ? 'secondary' : 'ghost'}
+              className={cn(
+                "w-full justify-start",
+                activeTab === 'withdrawals' && "bg-secondary font-semibold"
+              )}
+              onClick={() => setActiveTab('withdrawals')}
+            >
+              <Banknote className="mr-2 h-4 w-4" />
+              Withdrawals
+            </Button>
           </div>
 
           {/* Platform */}
@@ -873,6 +1085,17 @@ const Admin = () => {
             >
               <Users className="mr-2 h-4 w-4" />
               User Management
+            </Button>
+            <Button
+              variant={activeTab === 'merchants' ? 'secondary' : 'ghost'}
+              className={cn(
+                "w-full justify-start",
+                activeTab === 'merchants' && "bg-secondary font-semibold"
+              )}
+              onClick={() => setActiveTab('merchants')}
+            >
+              <Store className="mr-2 h-4 w-4" />
+              Merchants
             </Button>
             <Button
               variant={activeTab === 'settings' ? 'secondary' : 'ghost'}
@@ -1114,7 +1337,7 @@ const Admin = () => {
                           <TableCell>₹{product.revenue.toLocaleString()}</TableCell>
                           <TableCell>
                             <Badge variant="secondary">
-                              {product.userId 
+                              {product.userId
                                 ? allStores.find(s => s.userId === product.userId)?.storeName || 'Unknown'
                                 : 'Unknown'}
                             </Badge>
@@ -1407,13 +1630,13 @@ const Admin = () => {
                       ) : (
                         usersData.map((userData) => (
                           <TableRow key={userData.userId}>
-                          <TableCell>
-                            <div>
+                            <TableCell>
+                              <div>
                                 <p className="font-medium">{userData.userName}</p>
                                 <p className="text-sm text-muted-foreground">{userData.userEmail}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
+                              </div>
+                            </TableCell>
+                            <TableCell>
                               {userData.stores.length} {userData.stores.length === 1 ? 'store' : 'stores'}
                             </TableCell>
                             <TableCell>
@@ -1424,17 +1647,17 @@ const Admin = () => {
                               )}
                             </TableCell>
                             <TableCell>
-                              <Badge 
-                                variant="secondary" 
+                              <Badge
+                                variant="secondary"
                                 className={userData.status === 'Active' ? 'bg-green-500/10 text-green-500' : 'bg-gray-500/10 text-gray-500'}
                               >
                                 {userData.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-2 justify-end">
-                                <Button 
-                                  variant="ghost" 
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  variant="ghost"
                                   size="sm"
                                   onClick={() => {
                                     setEditingUserId(userData.userId);
@@ -1443,18 +1666,18 @@ const Admin = () => {
                                   }}
                                   disabled={editingUserId === userData.userId}
                                 >
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
                                       className="text-destructive"
                                       disabled={disablingUserId === userData.userId}
                                     >
-                                <Ban className="h-4 w-4" />
-                              </Button>
+                                      <Ban className="h-4 w-4" />
+                                    </Button>
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>
@@ -1487,9 +1710,9 @@ const Admin = () => {
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
                                 </AlertDialog>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                              </div>
+                            </TableCell>
+                          </TableRow>
                         ))
                       )}
                     </TableBody>
@@ -1497,6 +1720,11 @@ const Admin = () => {
                 </CardContent>
               </Card>
             </>
+          )}
+
+          {/* Merchants Tab */}
+          {activeTab === 'merchants' && (
+            <MerchantsTab />
           )}
 
           {/* Products Tab */}
@@ -1671,7 +1899,7 @@ const Admin = () => {
                     value={ordersSearchQuery}
                     onChange={(e) => setOrdersSearchQuery(e.target.value)}
                   />
-                    </div>
+                </div>
 
                 {/* Filters Row */}
                 <div className="flex flex-wrap gap-3 items-center">
@@ -1679,17 +1907,17 @@ const Admin = () => {
                   <Select value={ordersStatusFilter} onValueChange={setOrdersStatusFilter}>
                     <SelectTrigger className="w-[140px]">
                       <SelectValue placeholder="All Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Status</SelectItem>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="on-hold">On-hold</SelectItem>
                       <SelectItem value="in-production">In Production</SelectItem>
-                          <SelectItem value="shipped">Shipped</SelectItem>
+                      <SelectItem value="shipped">Shipped</SelectItem>
                       <SelectItem value="delivered">Delivered</SelectItem>
                       <SelectItem value="refunded">Refunded</SelectItem>
                       <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    </SelectContent>
+                  </Select>
 
                   {/* Amount Sort */}
                   <Select value={ordersAmountSort} onValueChange={setOrdersAmountSort}>
@@ -1716,7 +1944,7 @@ const Admin = () => {
                       <SelectItem value="email-za">Email (Z → A)</SelectItem>
                     </SelectContent>
                   </Select>
-                    </div>
+                </div>
               </div>
 
               <Card>
@@ -2321,6 +2549,12 @@ const Admin = () => {
                 </Card>
               </div>
             </>
+          )}
+
+          {activeTab === 'withdrawals' && (
+            <div className="space-y-6">
+              <WithdrawalsManagement />
+            </div>
           )}
         </div>
       </main>

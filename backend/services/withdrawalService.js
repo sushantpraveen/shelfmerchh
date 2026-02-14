@@ -221,15 +221,12 @@ const rejectRequest = async (requestId, adminId, reason) => {
  * Mark a withdrawal request as paid
  * @param {string} requestId - Withdrawal request ID
  * @param {string} adminId - Admin user ID marking as paid
- * @param {string} payoutReference - UTR or transaction reference
+ * @param {string} payoutReference - UTR or transaction reference (optional)
  * @param {string} notes - Optional notes
+ * @param {string} paymentScreenshotUrl - Optional payment screenshot URL
  * @returns {Promise<WithdrawalRequest>}
  */
-const markAsPaid = async (requestId, adminId, payoutReference, notes = '') => {
-    if (!payoutReference || payoutReference.trim().length < 3) {
-        throw new Error('Payout reference (UTR) is required');
-    }
-
+const markAsPaid = async (requestId, adminId, payoutReference, notes = '', paymentScreenshotUrl = null) => {
     const request = await WithdrawalRequest.findById(requestId);
 
     if (!request) {
@@ -242,12 +239,13 @@ const markAsPaid = async (requestId, adminId, payoutReference, notes = '') => {
 
     request.status = 'PAID';
     request.paidAt = new Date();
-    request.payoutReference = payoutReference.trim();
+    request.payoutReference = payoutReference ? payoutReference.trim() : undefined;
+    request.paymentScreenshotUrl = paymentScreenshotUrl;
     request.payoutNotes = notes ? notes.trim() : '';
     await request.save();
 
     console.log(
-        `[WithdrawalService] Admin ${adminId} marked withdrawal ${requestId} as PAID, UTR: ${payoutReference}`
+        `[WithdrawalService] Admin ${adminId} marked withdrawal ${requestId} as PAID, UTR: ${payoutReference || 'N/A'}, Screenshot: ${paymentScreenshotUrl ? 'Yes' : 'No'}`
     );
 
     return request;
@@ -294,6 +292,9 @@ const getAllForAdmin = async (options = {}) => {
     if (merchantId) {
         query.merchantId = merchantId;
     }
+
+    console.log('[WithdrawalService] getAllForAdmin query:', JSON.stringify(query));
+    console.log('[WithdrawalService] options:', JSON.stringify({ limit, skip, status }));
 
     const [requests, total] = await Promise.all([
         WithdrawalRequest.find(query)
