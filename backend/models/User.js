@@ -10,8 +10,8 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: [true, 'Please provide an email'],
     unique: true,
+    sparse: true,
     lowercase: true,
     trim: true,
     match: [
@@ -57,11 +57,23 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isPhoneVerified: {
+    type: Boolean,
+    default: false
+  },
   emailVerificationToken: {
     type: String,
     select: false
   },
-  verificationTokenExpiry: {
+  emailVerificationTokenExpiry: {
+    type: Date,
+    select: false
+  },
+  phoneVerificationToken: {
+    type: String,
+    select: false
+  },
+  phoneVerificationTokenExpiry: {
     type: Date,
     select: false
   },
@@ -82,14 +94,6 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
     trim: true
-  },
-  loginOtp: {
-    type: String,
-    select: false
-  },
-  loginOtpExpires: {
-    type: Date,
-    select: false
   },
   lastLogin: {
     type: Date
@@ -149,6 +153,7 @@ userSchema.methods.toJSON = function () {
   delete userObject.password;
   delete userObject.refreshToken;
   delete userObject.emailVerificationToken;
+  delete userObject.phoneVerificationToken;
   delete userObject.passwordResetToken;
   return userObject;
 };

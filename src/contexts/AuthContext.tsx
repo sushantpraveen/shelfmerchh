@@ -7,8 +7,11 @@ export type UserRole = 'superadmin' | 'merchant' | 'user';
 export interface User {
   id: string;
   email: string;
+  phone?: string;
   name: string;
   role: UserRole;
+  isEmailVerified: boolean;
+  isPhoneVerified: boolean;
   createdAt: string;
   lastLogin?: string;
   upiId?: string;
@@ -21,7 +24,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
   loginWithOtp: (identifier: string, otp: string, serverOtp?: string) => Promise<void>;
-  signupComplete: (data: { name: string, phone: string, email: string, password?: string, otp?: string, serverOtp?: string }) => Promise<void>;
+  signupComplete: (data: { name: string, phone?: string, email?: string, password?: string, otp?: string, serverOtp?: string }) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
   isMerchant: boolean;
@@ -46,8 +49,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser({
               id: response.user.id,
               email: response.user.email,
+              phone: response.user.phone,
               name: response.user.name,
               role: response.user.role as UserRole,
+              isEmailVerified: response.user.isEmailVerified || false,
+              isPhoneVerified: response.user.isPhoneVerified || false,
               createdAt: response.user.createdAt,
               lastLogin: response.user.lastLogin,
               upiId: response.user.upiId
@@ -77,8 +83,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: response.user.id,
           email: response.user.email,
+          phone: response.user.phone,
           name: response.user.name,
           role: response.user.role as UserRole,
+          isEmailVerified: response.user.isEmailVerified || false,
+          isPhoneVerified: response.user.isPhoneVerified || false,
           createdAt: response.user.createdAt,
           upiId: response.user.upiId
         });
@@ -120,8 +129,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: response.user.id,
           email: response.user.email,
+          phone: response.user.phone,
           name: response.user.name,
           role: response.user.role as UserRole,
+          isEmailVerified: response.user.isEmailVerified || false,
+          isPhoneVerified: response.user.isPhoneVerified || false,
           createdAt: response.user.createdAt,
           upiId: response.user.upiId
         });
@@ -134,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signupComplete = async (data: { name: string, phone: string, email: string, password?: string, otp?: string, serverOtp?: string }) => {
+  const signupComplete = async (data: { name: string, phone?: string, email?: string, password?: string, otp?: string, serverOtp?: string }) => {
     try {
       const response = await authApi.completeSignupOtp(data);
       if (response.success && response.user) {
@@ -143,8 +155,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: response.user.id,
           email: response.user.email,
+          phone: response.user.phone,
           name: response.user.name,
           role: response.user.role as UserRole,
+          isEmailVerified: response.user.isEmailVerified || false,
+          isPhoneVerified: response.user.isPhoneVerified || false,
           createdAt: response.user.createdAt,
           upiId: response.user.upiId
         });
@@ -177,8 +192,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: response.user.id,
           email: response.user.email,
+          phone: response.user.phone,
           name: response.user.name,
           role: response.user.role as UserRole,
+          isEmailVerified: response.user.isEmailVerified || false,
+          isPhoneVerified: response.user.isPhoneVerified || false,
           createdAt: response.user.createdAt,
           lastLogin: response.user.lastLogin,
           upiId: response.user.upiId

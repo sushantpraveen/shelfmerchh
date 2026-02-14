@@ -127,22 +127,27 @@ const Auth = () => {
           toast.error(err.message || 'Invalid code');
         } finally { setIsLoading(false); }
       } else {
-        // Signup: Primary Verify Success
+        // Signup: Primary Verify Success - go directly to NAME step
         if (entryType === 'email') {
-          // Email verified, now ask for phone
+          // Email verified via serverOtp comparison
           if (otpValue === serverOtp) {
-            setStep('SECONDARY_ID');
+            setStep('NAME');
             setOtp(['', '', '', '', '', '']);
-            setServerOtp('');
           } else { toast.error('Invalid code'); }
         } else {
-          // Phone verified, now ask for email
-          if (otpValue === serverOtp) {
-            setStep('SECONDARY_ID');
-            setOtp(['', '', '', '', '', '']);
-            setServerOtp('');
-          } else {
-            toast.error('Invalid OTP');
+          // Phone verified via backend
+          setIsLoading(true);
+          try {
+            const res = await authApi.verifyLoginOtp(identifier, otpValue);
+            if (res.success) {
+              setStep('NAME');
+              setOtp(['', '', '', '', '', '']);
+              setServerOtp('');
+            }
+          } catch (err: any) {
+            toast.error(err.message || 'Invalid OTP');
+          } finally {
+            setIsLoading(false);
           }
         }
       }
@@ -161,8 +166,19 @@ const Auth = () => {
         toast.error('Enter a valid 10-digit phone number');
         return;
       }
-      setStep('VERIFY_SECONDARY');
-      toast.success('Phone verification started (Dummy: 123456)');
+      setIsLoading(true);
+      try {
+        const res = await authApi.initLoginOtp(secondaryIdentifier);
+        if (res.success) {
+          if (res.serverOtp) setServerOtp(res.serverOtp);
+          setStep('VERIFY_SECONDARY');
+          toast.success('OTP sent to your phone');
+        }
+      } catch (err: any) {
+        toast.error(err.message || 'Error sending OTP');
+      } finally {
+        setIsLoading(false);
+      }
     } else {
       if (!validateEmail(secondaryIdentifier)) {
         toast.error('Enter a valid email address');
@@ -183,16 +199,24 @@ const Auth = () => {
   };
 
   // Step 4 (Signup): Secondary Verification
-  const handleSecondaryVerify = () => {
+  const handleSecondaryVerify = async () => {
     const otpValue = otp.join('');
     if (otpValue.length < 6) { toast.error('Enter 6-digit code'); return; }
 
     if (entryType === 'email') {
-      // Secondary is phone
-      if (otpValue === '123456') {
-        setStep('NAME');
-        setOtp(['', '', '', '', '', '']);
-      } else { toast.error('Invalid code'); }
+      // Secondary is phone - verify via backend
+      setIsLoading(true);
+      try {
+        const res = await authApi.verifyLoginOtp(secondaryIdentifier, otpValue);
+        if (res.success) {
+          setStep('NAME');
+          setOtp(['', '', '', '', '', '']);
+        }
+      } catch (err: any) {
+        toast.error(err.message || 'Invalid code');
+      } finally {
+        setIsLoading(false);
+      }
     } else {
       // Secondary is email
       if (otpValue === serverOtp) {
@@ -208,17 +232,19 @@ const Auth = () => {
 
     setIsLoading(true);
     try {
-      const signupData = {
+      const signupData: any = {
         name,
-        email: entryType === 'email' ? identifier : secondaryIdentifier,
-        phone: entryType === 'phone' ? identifier : secondaryIdentifier,
-        otp: 'Verified', // Placeholder as backend verified in previous steps or expects this for complete
+        otp: 'Verified',
         serverOtp: 'Verified'
       };
 
-      // Note: Backend might need serverOtp/otp but since it's step-by-step
-      // we'll pass the last successful values if needed. 
-      // Current signupComplete just creates the user.
+      // Only send the verified identifier
+      if (entryType === 'email') {
+        signupData.email = identifier;
+      } else {
+        signupData.phone = identifier;
+      }
+
       await signupComplete(signupData);
       toast.success('Account successfully created');
       navigate('/dashboard');
