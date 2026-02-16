@@ -143,13 +143,6 @@ const Admin = () => {
   const [suspendingStoreId, setSuspendingStoreId] = useState<string | null>(null);
   const [isSuspendingStore, setIsSuspendingStore] = useState(false);
 
-  // Merchants state
-  const [merchants, setMerchants] = useState<any[]>([]);
-  const [isLoadingMerchants, setIsLoadingMerchants] = useState(false);
-  const [merchantsSearchQuery, setMerchantsSearchQuery] = useState('');
-  const [merchantsPage, setMerchantsPage] = useState(1);
-  const [merchantsTotal, setMerchantsTotal] = useState(0);
-  const [merchantsLimit] = useState(10);
 
   // Admin sees ALL data across platform (stores/products from localStorage snapshot)
   const allStores = JSON.parse(localStorage.getItem('shelfmerch_all_stores') || '[]') as StoreType[];
@@ -627,195 +620,6 @@ const Admin = () => {
     }
   };
 
-  // Fetch merchants from backend
-  const fetchMerchants = useCallback(async () => {
-    if (activeTab !== 'merchants' || user?.role !== 'superadmin') {
-      return;
-    }
-
-    setIsLoadingMerchants(true);
-    try {
-      const { authApi } = await import('@/lib/api');
-      const response = await authApi.getMerchants({
-        page: merchantsPage,
-        limit: merchantsLimit,
-        search: merchantsSearchQuery.trim() || undefined
-      });
-
-      if (response && response.success) {
-        setMerchants(response.data || []);
-        setMerchantsTotal(response.pagination.total || 0);
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch merchants:', error);
-      toast.error(error.message || 'Failed to load merchants');
-    } finally {
-      setIsLoadingMerchants(false);
-    }
-  }, [activeTab, user?.role, merchantsPage, merchantsSearchQuery, merchantsLimit]);
-
-  useEffect(() => {
-    if (activeTab === 'merchants') {
-      const timeoutId = setTimeout(() => {
-        fetchMerchants();
-      }, 300);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [activeTab, fetchMerchants, merchantsPage, merchantsSearchQuery]);
-
-  const MerchantsTab = () => (
-    <>
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Merchants</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage and view all registered merchants on the platform
-          </p>
-        </div>
-        <Button className="gap-2">
-          <Download className="h-4 w-4" />
-          Export Merchants
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Merchants ({merchantsTotal})</CardTitle>
-              <CardDescription>Comprehensive list of merchants and their details</CardDescription>
-            </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or email..."
-                className="pl-9 w-64"
-                value={merchantsSearchQuery}
-                onChange={(e) => {
-                  setMerchantsSearchQuery(e.target.value);
-                  setMerchantsPage(1);
-                }}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoadingMerchants && merchants.length === 0 ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Merchant</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>UPI ID</TableHead>
-                      <TableHead>Joined</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {merchants.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                          No merchants found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      merchants.map((merchant) => (
-                        <TableRow key={merchant._id}>
-                          <TableCell>
-                            <div className="font-medium">{merchant.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {merchant.email}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {merchant.phone || '-'}
-                          </TableCell>
-                          <TableCell>
-                            {merchant.upiId ? (
-                              <code className="bg-muted px-1 rounded text-xs">
-                                {merchant.upiId}
-                              </code>
-                            ) : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {merchant.createdAt ? new Date(merchant.createdAt).toLocaleDateString() : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={merchant.isActive ? "secondary" : "destructive"}
-                              className={merchant.isActive ? "bg-green-500/10 text-green-500" : ""}
-                            >
-                              {merchant.isActive ? 'Active' : 'Inactive'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {merchantsTotal > merchantsLimit && (
-                <div className="mt-4">
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() => setMerchantsPage(p => Math.max(1, p - 1))}
-                          className={merchantsPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                        />
-                      </PaginationItem>
-
-                      {Array.from({ length: Math.min(5, Math.ceil(merchantsTotal / merchantsLimit)) }, (_, i) => {
-                        const totalPages = Math.ceil(merchantsTotal / merchantsLimit);
-                        let startPage = Math.max(1, merchantsPage - 2);
-                        if (startPage + 4 > totalPages) {
-                          startPage = Math.max(1, totalPages - 4);
-                        }
-                        const p = startPage + i;
-                        if (p > totalPages) return null;
-
-                        return (
-                          <PaginationItem key={p}>
-                            <PaginationLink
-                              isActive={merchantsPage === p}
-                              onClick={() => setMerchantsPage(p)}
-                              className="cursor-pointer"
-                            >
-                              {p}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      })}
-
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() => setMerchantsPage(p => Math.min(Math.ceil(merchantsTotal / merchantsLimit), p + 1))}
-                          className={merchantsPage >= Math.ceil(merchantsTotal / merchantsLimit) ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </>
-  );
 
   const stats = [
     {
@@ -1085,17 +889,6 @@ const Admin = () => {
             >
               <Users className="mr-2 h-4 w-4" />
               User Management
-            </Button>
-            <Button
-              variant={activeTab === 'merchants' ? 'secondary' : 'ghost'}
-              className={cn(
-                "w-full justify-start",
-                activeTab === 'merchants' && "bg-secondary font-semibold"
-              )}
-              onClick={() => setActiveTab('merchants')}
-            >
-              <Store className="mr-2 h-4 w-4" />
-              Merchants
             </Button>
             <Button
               variant={activeTab === 'settings' ? 'secondary' : 'ghost'}
@@ -1575,7 +1368,7 @@ const Admin = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Active Merchants</p>
+                        <p className="text-sm text-muted-foreground">Active Stores</p>
                         <p className="text-2xl font-bold mt-1">{effectiveStores.length}</p>
                       </div>
                       <Store className="h-8 w-8 text-primary" />
@@ -1722,10 +1515,6 @@ const Admin = () => {
             </>
           )}
 
-          {/* Merchants Tab */}
-          {activeTab === 'merchants' && (
-            <MerchantsTab />
-          )}
 
           {/* Products Tab */}
           {activeTab === 'products' && (

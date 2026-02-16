@@ -5,17 +5,20 @@ const User = require('../models/User');
 module.exports = function(passport) {
   // Only configure Google OAuth if credentials are provided
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    // Build callback URL - use GOOGLE_CALLBACK_URL if set, otherwise construct from BASE_DOMAIN/BASE_URL
-    const BASE_DOMAIN = process.env.BASE_DOMAIN || 'shelfmerch.com';
-    const BASE_URL = process.env.BASE_URL || (process.env.NODE_ENV === 'production' 
-      ? `https://${BASE_DOMAIN}` 
-      : 'http://localhost:5000');
+    const isProduction = process.env.NODE_ENV === 'production';
     
-    // Allow explicit override via GOOGLE_CALLBACK_URL env var
-    const callbackURL = process.env.GOOGLE_CALLBACK_URL || `${BASE_URL}/api/auth/google/callback`;
+    // Determine base URL based on environment
+    const BASE_URL = isProduction 
+      ? (process.env.BASE_URL || 'https://shelfmerch.com')
+      : 'http://localhost:5000';
     
-    console.log(`🔗 Google OAuth callback URL: ${callbackURL}`);
-    console.log(`🔑 Google Client ID: ${process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.substring(0, 15) + '...' : 'MISSING'}`);
+    // The callback URL MUST match one of the authorized redirect URIs in Google Console
+    const callbackURL = `${BASE_URL}/api/auth/google/callback`;
+    
+    console.log(`📡 Google OAuth Strategy Configured:`);
+    console.log(`   - Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`   - Callback URL: ${callbackURL}`);
+    console.log(`   - Proxy Enabled: true`);
     
     passport.use(
       new GoogleStrategy(
@@ -23,7 +26,7 @@ module.exports = function(passport) {
           clientID: process.env.GOOGLE_CLIENT_ID,
           clientSecret: process.env.GOOGLE_CLIENT_SECRET,
           callbackURL: callbackURL,
-          proxy: true
+          proxy: true // Required for accurate protocol detection behind proxies like Nginx
         },
         async (accessToken, refreshToken, profile, done) => {
           try {

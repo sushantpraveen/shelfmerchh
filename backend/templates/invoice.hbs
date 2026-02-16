@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+        :root {
+            --brand-color: #2563eb; /* Modern Blue */
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-light: #f9fafb;
+        }
+
+        body {
+            font-family: 'Inter', 'Helvetica', sans-serif;
+            color: var(--text-main);
+            line-height: 1.5;
+            margin: 0;
+            padding: 40px;
+            background: white;
+            font-size: 13px;
+        }
+
+        /* Container for A4 padding */
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Header Layout */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 30px;
+            margin-bottom: 30px;
+        }
+
+        .company-info {
+            flex: 1;
+        }
+
+        .logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+
+        .company-name {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            color: var(--text-main);
+        }
+
+        .company-details {
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        .invoice-meta {
+            text-align: right;
+        }
+
+        .invoice-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0;
+            color: var(--brand-color);
+            letter-spacing: -0.025em;
+        }
+
+        .meta-grid {
+            margin-top: 15px;
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 5px 15px;
+            justify-content: end;
+            font-size: 12px;
+        }
+
+        .meta-label {
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .meta-value {
+            font-weight: 700;
+        }
+
+        /* Billing Section */
+        .billing-section {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .billing-box {
+            flex: 1;
+        }
+
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        .address-name {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .address-text {
+            color: var(--text-main);
+            font-size: 12px;
+            white-space: pre-line;
+        }
+
+        /* Table Design */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        thead th {
+            background: var(--bg-light);
+            text-align: left;
+            padding: 12px 10px;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--text-muted);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        tbody td {
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .product-name {
+            font-weight: 600;
+            display: block;
+        }
+
+        .product-variant {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .text-right {
+            text-align: right !important;
+        }
+
+        /* Summary Section */
+        .summary-container {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .summary-box {
+            width: 250px;
+            background: var(--bg-light);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .summary-row.total {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 2px solid var(--border-color);
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--brand-color);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 60px;
+            text-align: center;
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        .signature-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 40px;
+        }
+
+        .signature-line {
+            width: 200px;
+            border-top: 1px solid var(--text-main);
+            text-align: center;
+            padding-top: 8px;
+            font-weight: 600;
+        }
+
+        @media print {
+            body { padding: 0; }
+            .invoice-container { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <header>
+            <div class="company-info">
+                {{#if logoBase64}}
+                    <img src="data:image/png;base64,{{logoBase64}}" class="logo" alt="ShelfMerch Logo">
+                {{else}}
+                    <h1 class="company-name">{{companyName}}</h1>
+                {{/if}}
+                <div class="company-details">
+                    {{companyAddress}}<br>
+                    Email: {{companyEmail}}<br>
+                    Phone: {{companyPhone}}<br>
+                    {{#if companyGSTIN}}
+                        <strong>GSTIN: {{companyGSTIN}}</strong>
+                    {{/if}}
+                </div>
+            </div>
+            <div class="invoice-meta">
+                <h2 class="invoice-title">INVOICE</h2>
+                <div class="meta-grid">
+                    <span class="meta-label">Invoice No:</span>
+                    <span class="meta-value">#{{invoiceNo}}</span>
+                    
+                    <span class="meta-label">Order ID:</span>
+                    <span class="meta-value">{{orderId}}</span>
+                    
+                    <span class="meta-label">Date:</span>
+                    <span class="meta-value">{{date}}</span>
+                    
+                    <span class="meta-label">Status:</span>
+                    <span class="meta-value" style="color: {{#if isPaid}}#059669{{else}}#dc2626{{/if}}">
+                        {{paymentStatus}}
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <section class="billing-section">
+            <div class="billing-box">
+                <div class="section-title">Bill To</div>
+                <div class="address-name">{{customerName}}</div>
+                <div class="address-text">{{customerEmail}}
+                    {{customerPhone}}
+                    {{customerAddress}}
+                </div>
+            </div>
+            <div class="billing-box">
+                <div class="section-title">Ship To</div>
+                <div class="address-text">
+                    {{#if shipToSame}}
+                        Same as billing
+                    {{else}}
+                        {{shippingName}}
+                        {{shippingAddress}}
+                    {{/if}}
+                </div>
+            </div>
+        </section>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Variant</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Price</th>
+                    <th class="text-right">Tax (%)</th>
+                    <th class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each items}}
+                <tr>
+                    <td>
+                        <span class="product-name">{{this.name}}</span>
+                    </td>
+                    <td>
+                        <span class="product-variant">{{this.variant}}</span>
+                    </td>
+                    <td class="text-right">{{this.qty}}</td>
+                    <td class="text-right">Rs. {{this.price}}</td>
+                    <td class="text-right">{{this.taxRate}}%</td>
+                    <td class="text-right">Rs. {{this.total}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <div class="summary-container">
+            <div class="summary-box">
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <span>Rs. {{subtotal}}</span>
+                </div>
+                <div class="summary-row">
+                    <span>Shipping</span>
+                    <span>Rs. {{shipping}}</span>
+                </div>
+                {{#if discount}}
+                <div class="summary-row">
+                    <span>Discount</span>
+                    <span style="color: #059669">-Rs. {{discount}}</span>
+                </div>
+                {{/if}}
+                <div class="summary-row">
+                    <span>CGST (9%)</span>
+                    <span>Rs. {{cgst}}</span>
+                </div>
+                <div class="summary-row">
+                    <span>SGST (9%)</span>
+                    <span>Rs. {{sgst}}</span>
+                </div>
+                <div class="summary-row" style="font-weight: 600;">
+                    <span>Total Tax</span>
+                    <span>Rs. {{totalTax}}</span>
+                </div>
+                <div class="summary-row total">
+                    <span>Grand Total</span>
+                    <span>Rs. {{grandTotal}}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="signature-section">
+            <div class="signature-line">Authorized Signature</div>
+        </div>
+
+        <footer>
+            <p>This is a system-generated invoice. No physical signature required.</p>
+            <p>Support: support@shelfmerch.in | website: www.shelfmerch.in</p>
+        </footer>
+    </div>
+</body>
+</html>

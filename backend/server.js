@@ -49,59 +49,20 @@ const storeRedirect = require('./middleware/storeRedirect');
 // Initialize Express app
 const app = express();
 
+const { WHITELISTED_DOMAINS } = require('./utils/security');
+
 // CORS configuration - MUST BE FIRST
 // Supports wildcard subdomains for multi-tenant architecture
 const corsOptions = {
   origin: function (origin, callback) {
-    const BASE_DOMAIN = process.env.BASE_DOMAIN || 'shelfmerch.in';
-    const isProduction = process.env.NODE_ENV === 'production';
-
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
-    // Build allowed origins list
-    const allowedOrigins = process.env.CORS_ORIGINS
-      ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
-      : [];
+    const isWhitelisted = WHITELISTED_DOMAINS.some(domain => 
+      origin.includes(domain)
+    );
 
-    // Always allow root domain
-    allowedOrigins.push(`https://${BASE_DOMAIN}`);
-    allowedOrigins.push(`http://${BASE_DOMAIN}`);
-
-    // Allow CLIENT_URL if defined
-    if (process.env.CLIENT_URL) {
-      allowedOrigins.push(process.env.CLIENT_URL);
-    }
-
-    allowedOrigins.push('http://localhost:8080');
-    allowedOrigins.push('http://72.62.76.198:8080');
-    allowedOrigins.push('http://localhost:8085');
-
-    // In production, allow wildcard subdomains (*.shelfmerch.in)
-    if (isProduction) {
-      // Allow any subdomain of base domain
-      if (origin.match(new RegExp(`^https://[^.]+\.${BASE_DOMAIN.replace('.', '\\.')}$`))) {
-        console.log(`✓ CORS allowed for subdomain origin: ${origin}`);
-        return callback(null, true);
-      }
-    }
-
-    // In development, allow all localhost origins and localhost subdomains
-    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-        console.log(`✓ CORS allowed for localhost origin: ${origin}`);
-        return callback(null, true);
-      }
-      // Also allow localhost subdomains for dev (e.g., xyz.localhost:3000)
-      if (origin.match(/^https?:\/\/[^.]+\.localhost(:\d+)?$/)) {
-        console.log(`✓ CORS allowed for localhost subdomain: ${origin}`);
-        return callback(null, true);
-      }
-    }
-
-    // Check explicit allowed origins
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      console.log(`✓ CORS allowed for origin: ${origin}`);
+    if (isWhitelisted) {
       callback(null, true);
     } else {
       console.warn(`❌ CORS blocked origin: ${origin}`);
@@ -158,8 +119,11 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production', // true in production
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+  },
+  proxy: true // Required for secure cookie over HTTPS behind a proxy
 }));
 
 // Passport Config
