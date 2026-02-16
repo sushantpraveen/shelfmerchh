@@ -1214,6 +1214,8 @@ router.get('/merchants', protect, authorize('superadmin'), async (req, res) => {
       success: false,
       message: 'Server error while fetching merchants'
     });
+  }
+});
 
 // @route   POST /api/auth/verify-email-later
 // @desc    Send OTP to email for post-registration verification
