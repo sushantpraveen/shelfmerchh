@@ -1394,25 +1394,26 @@ export const authApi = {
 
     const query = queryParams.toString();
     return apiRequest<{
-      success: boolean;
-      count: number;
+      success: boolean,
+      count: number,
       pagination: {
-        total: number;
-        page: number;
-        limit: number;
-        pages: number;
-      };
+        total: number,
+        page: number,
+        limit: number,
+        pages: number
+      },
       data: Array<{
-        _id: string;
-        name: string;
-        email: string;
-        phone?: string;
-        upiId?: string;
-        createdAt: string;
-        lastLogin?: string;
-        isActive: boolean;
-      }>;
+        _id: string,
+        name: string,
+        email: string,
+        phone?: string,
+        upiId?: string,
+        createdAt: string,
+        lastLogin?: string,
+        isActive: boolean
+      }>
     }>(`/auth/merchants${query ? `?${query}` : ''}`);
+  },
 
   // Post-registration verification
   sendEmailVerificationLater: async (email: string) => {

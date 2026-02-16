@@ -10,6 +10,8 @@ import { Loader2 } from 'lucide-react';
 import logo from '@/assets/logo.webp';
 import googleLogo from '@/assets/google-logo-new.png';
 import { PasswordInput } from '@/components/ui/PasswordInput';
+import { RAW_API_URL } from '@/config';
+import { useEffect } from 'react';
 
 type AuthStep =
   | 'IDENTIFIER'
@@ -21,8 +23,45 @@ type AuthStep =
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { login, loginWithOtp, signupComplete } = useAuth();
+  const { login, loginWithOtp, signupComplete, refreshUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Handle OAuth Callback (Token extraction from URL)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const refreshToken = urlParams.get('refreshToken');
+    const error = urlParams.get('error');
+
+    if (error) {
+      toast.error('Google authentication failed. Please try again.');
+      // Clear URL params
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (token && refreshToken) {
+      const handleOAuthLogin = async () => {
+        setIsLoading(true);
+        try {
+          localStorage.setItem('token', token);
+          localStorage.setItem('refreshToken', refreshToken);
+
+          await refreshUser(); // Load user profile
+
+          toast.success('Signed in with Google successfully!');
+          navigate('/dashboard');
+        } catch (err) {
+          console.error('OAuth token processing error:', err);
+          toast.error('Failed to complete sign-in. Please try again.');
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+        } finally {
+          setIsLoading(false);
+          // Clear URL params
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      };
+      handleOAuthLogin();
+    }
+  }, [navigate, refreshUser]);
 
   // App State
   const [step, setStep] = useState<AuthStep>('IDENTIFIER');
@@ -323,6 +362,30 @@ const Auth = () => {
                     disabled={isLoading}
                   >
                     {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Continue'}
+                  </Button>
+
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-gray-100"></span>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-400 font-medium">Or continue with</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    className="w-full h-12 border-gray-200 rounded-xl hover:bg-gray-50 flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
+                    onClick={() => {
+                      // Construct the Google OAuth initiation URL
+                      const googleAuthUrl = `${RAW_API_URL}/api/auth/google`;
+                      console.log('📡 Redirecting to Google Auth:', googleAuthUrl);
+                      window.location.href = googleAuthUrl;
+                    }}
+                    disabled={isLoading}
+                  >
+                    <img src={googleLogo} alt="Google" className="h-5 w-5" />
+                    <span className="font-bold text-gray-700">Sign in with Google</span>
                   </Button>
                 </>
               )}

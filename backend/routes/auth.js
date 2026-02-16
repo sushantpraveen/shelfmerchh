@@ -11,20 +11,18 @@ const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 const passport = require('passport');
+const { getClientUrl } = require('../utils/security');
 
 // @route   GET /api/auth/google
 // @desc    Auth with Google
 // @access  Public
 router.get('/google', (req, res, next) => {
-  const host = req.get('host');
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const callbackURL = `${protocol}://${host}/api/auth/google/callback`;
-
-  console.log(`📡 Initiating Google OAuth with callback: ${callbackURL}`);
+  const clientUrl = getClientUrl(req);
+  console.log(`📡 Initiating Google OAuth | Client: ${clientUrl}`);
 
   passport.authenticate('google', {
     scope: ['profile', 'email'],
-    callbackURL: callbackURL
+    state: JSON.stringify({ clientUrl }) // Pass clientUrl through state if needed
   })(req, res, next);
 });
 
@@ -33,23 +31,26 @@ router.get('/google', (req, res, next) => {
 // @access  Public
 router.get(
   '/google/callback',
-  (req, res, next) => {
-    const host = req.get('host');
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const callbackURL = `${protocol}://${host}/api/auth/google/callback`;
-
-    passport.authenticate('google', {
-      session: false,
-      failureRedirect: '/login',
-      callbackURL: callbackURL
-    })(req, res, next);
-  },
+  passport.authenticate('google', {
+    session: false,
+    failureRedirect: '/login'
+  }),
   async (req, res) => {
     try {
+      // 1. Determine final redirect target
+      let clientUrl = getClientUrl(req);
+      
+      // If we passed it through state, we could recover it here
+      if (req.query.state) {
+        try {
+          const state = JSON.parse(req.query.state);
+          if (state.clientUrl) clientUrl = state.clientUrl;
+        } catch (e) {}
+      }
+
       // Generate tokens
       const user = req.user;
       const response = await new Promise((resolve, reject) => {
-        // Mock res object to capture sendTokenResponse output
         const mockRes = {
           cookie: function () { return this; },
           status: function (code) { return this; },
@@ -58,25 +59,16 @@ router.get(
         sendTokenResponse(user, 200, mockRes);
       });
 
-      // Dynamic Frontend Redirect
-      const host = req.get('host');
-      const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-
-      const frontendUrl = isLocal
-        ? 'http://localhost:8080/auth'
-        : (process.env.CLIENT_URL || `https://${process.env.BASE_DOMAIN || 'shelfmerch.com'}/auth`);
-
+      // Construct final redirect URL
+      const frontendUrl = clientUrl.endsWith('/auth') ? clientUrl : `${clientUrl}/auth`;
       const redirectUrl = `${frontendUrl}?token=${response.token}&refreshToken=${response.refreshToken}`;
 
-      console.log(`🚀 Redirecting to: ${redirectUrl.split('?')[0]}...`);
+      console.log(`🚀 OAuth Success | Redirecting: ${frontendUrl}`);
       res.redirect(redirectUrl);
     } catch (err) {
-      console.error('Google OAuth callback error:', err);
-      const host = req.get('host');
-      const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-      const frontendUrl = isLocal
-        ? 'http://localhost:8080/auth'
-        : (process.env.CLIENT_URL || `https://${process.env.BASE_DOMAIN || 'shelfmerch.com'}/auth`);
+      console.error('❌ Google OAuth callback error:', err);
+      const clientUrl = getClientUrl(req);
+      const frontendUrl = clientUrl.endsWith('/auth') ? clientUrl : `${clientUrl}/auth`;
       res.redirect(`${frontendUrl}?error=google_auth_failed`);
     }
   }
@@ -1214,6 +1206,8 @@ router.get('/merchants', protect, authorize('superadmin'), async (req, res) => {
       success: false,
       message: 'Server error while fetching merchants'
     });
+  }
+});
 
 // @route   POST /api/auth/verify-email-later
 // @desc    Send OTP to email for post-registration verification

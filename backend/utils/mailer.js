@@ -303,9 +303,10 @@ const sendOTP = async (email, otp, name, type = 'login') => {
  * @param {string} merchantEmail - Merchant's email address
  * @param {object} order - Order details
  * @param {string} storeName - Name of the store
+ * @param {Array} [attachments] - Optional attachments
  * @returns {Promise<void>}
  */
-const sendMerchantOrderNotification = async (merchantEmail, order, storeName) => {
+const sendMerchantOrderNotification = async (merchantEmail, order, storeName, attachments = []) => {
   try {
     const transporter = createTransporter();
 
@@ -420,6 +421,7 @@ const sendMerchantOrderNotification = async (merchantEmail, order, storeName) =>
         
         © ${new Date().getFullYear()} ShelfMerch. All rights reserved.
       `,
+      attachments: attachments
     };
 
     const info = await transporter.sendMail(mailOptions);
