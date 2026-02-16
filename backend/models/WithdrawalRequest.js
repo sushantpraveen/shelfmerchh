@@ -79,6 +79,10 @@ const WithdrawalRequestSchema = new mongoose.Schema(
             enum: ['UPI', 'BANK_TRANSFER', 'OTHER'],
         },
         payoutReference: {
+            type: String, // Made optional as screenshot might replace it, or used together
+            trim: true,
+        },
+        paymentScreenshotUrl: {
             type: String,
             trim: true,
         },

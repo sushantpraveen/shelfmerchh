@@ -1,12 +1,36 @@
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { authApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 
 const ProfilePage = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const [name, setName] = useState(user?.name || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name);
+    }
+  }, [user]);
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      await authApi.updateProfile(name);
+      await refreshUser();
+      toast.success('Profile updated successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update profile');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -36,6 +60,7 @@ const ProfilePage = () => {
                 <p className="text-muted-foreground">Email</p>
                 <p className="font-medium">{user?.email || 'Not provided'}</p>
               </div>
+
             </div>
           </div>
 
@@ -54,57 +79,64 @@ const ProfilePage = () => {
           </div>
         </section>
 
-       <section className='rounded-lg border bg-card p-6 space-y-4'>
-         {/* Profile Settings */}
-                  <Card className="p-6 mb-6">
-                    <h2 className="text-xl font-semibold mb-4">Profile Information</h2>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="name">Full Name</Label>
-                        <Input id="name" defaultValue={user?.name} />
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" defaultValue={user?.email} disabled />
-                      </div>
-                      <Button>Save Changes</Button>
-                    </div>
-                  </Card>
-        
-                  {/* Notifications */}
-                  <Card className="p-6 mb-6">
-                    <h2 className="text-xl font-semibold mb-4">Notifications</h2>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">Order Updates</p>
-                          <p className="text-sm text-muted-foreground">Get notified when orders are placed</p>
-                        </div>
-                        <Button variant="outline" size="sm">Enable</Button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">Marketing Emails</p>
-                          <p className="text-sm text-muted-foreground">Receive tips and updates from ShelfMerch</p>
-                        </div>
-                        <Button variant="outline" size="sm">Enable</Button>
-                      </div>
-                    </div>
-                  </Card>
-        
-                  {/* Danger Zone */}
-                  <Card className="p-6 border-destructive">
-                    <h2 className="text-xl font-semibold mb-4 text-destructive">Danger Zone</h2>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          Once you delete your account, there is no going back. Please be certain.
-                        </p>
-                        <Button variant="destructive">Delete Account</Button>
-                      </div>
-                    </div>
-                  </Card>
-       </section>
+        <section className='rounded-lg border bg-card p-6 space-y-4'>
+          {/* Profile Settings */}
+          <Card className="p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Profile Information</h2>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" defaultValue={user?.email} disabled />
+              </div>
+
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </Card>
+
+          {/* Notifications */}
+          <Card className="p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Notifications</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Order Updates</p>
+                  <p className="text-sm text-muted-foreground">Get notified when orders are placed</p>
+                </div>
+                <Button variant="outline" size="sm">Enable</Button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Marketing Emails</p>
+                  <p className="text-sm text-muted-foreground">Receive tips and updates from ShelfMerch</p>
+                </div>
+                <Button variant="outline" size="sm">Enable</Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="p-6 border-destructive">
+            <h2 className="text-xl font-semibold mb-4 text-destructive">Danger Zone</h2>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Once you delete your account, there is no going back. Please be certain.
+                </p>
+                <Button variant="destructive">Delete Account</Button>
+              </div>
+            </div>
+          </Card>
+        </section>
 
         <section className="rounded-lg border bg-card p-6 space-y-4">
           <div>

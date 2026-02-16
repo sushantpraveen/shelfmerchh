@@ -113,6 +113,11 @@ const userSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  upiId: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'UPI ID cannot be more than 100 characters']
   }
 }, {
   timestamps: true

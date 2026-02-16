@@ -14,6 +14,7 @@ export interface User {
   isPhoneVerified: boolean;
   createdAt: string;
   lastLogin?: string;
+  upiId?: string;
 }
 
 interface AuthContextType {
@@ -55,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               isPhoneVerified: response.user.isPhoneVerified || false,
               createdAt: response.user.createdAt,
               lastLogin: response.user.lastLogin,
+              upiId: response.user.upiId
             });
           }
         }
@@ -87,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isEmailVerified: response.user.isEmailVerified || false,
           isPhoneVerified: response.user.isPhoneVerified || false,
           createdAt: response.user.createdAt,
+          upiId: response.user.upiId
         });
       } else {
         throw new Error('Login failed');
@@ -132,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isEmailVerified: response.user.isEmailVerified || false,
           isPhoneVerified: response.user.isPhoneVerified || false,
           createdAt: response.user.createdAt,
+          upiId: response.user.upiId
         });
       } else {
         throw new Error('Verification failed');
@@ -157,6 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isEmailVerified: response.user.isEmailVerified || false,
           isPhoneVerified: response.user.isPhoneVerified || false,
           createdAt: response.user.createdAt,
+          upiId: response.user.upiId
         });
       } else {
         throw new Error('Account creation failed');
@@ -194,6 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isPhoneVerified: response.user.isPhoneVerified || false,
           createdAt: response.user.createdAt,
           lastLogin: response.user.lastLogin,
+          upiId: response.user.upiId
         });
       }
     } catch (error) {

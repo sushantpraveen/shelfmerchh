@@ -46,6 +46,7 @@ interface WithdrawalRequest {
     rejectionReason?: string;
     payoutMethod: string;
     payoutReference?: string;
+    paymentScreenshotUrl?: string; // Added field
 }
 
 interface Invoice {
@@ -82,7 +83,7 @@ const MerchantWallet = () => {
             ]);
 
             setWalletSummary(summaryData);
-            setWithdrawals(withdrawalsData.data || []);
+            setWithdrawals(Array.isArray(withdrawalsData) ? withdrawalsData : (withdrawalsData as any).data || []);
             setInvoices(invoicesData || []);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Failed to load data';
@@ -168,7 +169,7 @@ const MerchantWallet = () => {
                 {/* Header */}
                 <div className="flex justify-between items-end mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold">Wallet & Payouts</h1>
+                        <h1 className="text-3xl font-bold">Wallet</h1>
                         <p className="text-muted-foreground mt-1">
                             Manage your wallet balance and withdrawal requests
                         </p>
@@ -218,16 +219,16 @@ const MerchantWallet = () => {
                     {/* Available for Withdrawal */}
                     <Card className="relative overflow-hidden">
                         <CardContent className="pt-6">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-3 rounded-full bg-green-500/10">
+                                    <div className="p-3 rounded-full bg-green-500/10 shrink-0">
                                         <ArrowDownToLine className="h-6 w-6 text-green-600" />
                                     </div>
-                                    <div>
-                                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold truncate">
                                             Available to Withdraw
                                         </p>
-                                        <p className="text-2xl font-bold text-green-600">
+                                        <p className="text-2xl font-bold text-green-600 break-words">
                                             ₹{walletSummary?.availableForWithdrawalRupees || '0.00'}
                                         </p>
                                     </div>
@@ -236,6 +237,7 @@ const MerchantWallet = () => {
                                     size="sm"
                                     onClick={() => setIsWithdrawalDialogOpen(true)}
                                     disabled={(walletSummary?.availableForWithdrawalPaise || 0) < 10000}
+                                    className="w-full sm:w-auto shrink-0"
                                 >
                                     Withdraw
                                 </Button>
@@ -349,13 +351,27 @@ const MerchantWallet = () => {
                                                         })}
                                                     </td>
                                                     <td className="px-6 py-4">
-                                                        {w.payoutReference ? (
-                                                            <span className="font-mono text-sm text-green-600">
-                                                                {w.payoutReference}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-muted-foreground text-sm">—</span>
-                                                        )}
+                                                        <div className="flex flex-col gap-1">
+                                                            {w.payoutReference && (
+                                                                <span className="font-mono text-sm text-green-600">
+                                                                    {w.payoutReference}
+                                                                </span>
+                                                            )}
+                                                            {w.paymentScreenshotUrl && (
+                                                                <a
+                                                                    href={w.paymentScreenshotUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-xs text-primary underline flex items-center gap-1 hover:text-primary/80"
+                                                                >
+                                                                    <Banknote className="h-3 w-3" />
+                                                                    View Receipt
+                                                                </a>
+                                                            )}
+                                                            {!w.payoutReference && !w.paymentScreenshotUrl && (
+                                                                <span className="text-muted-foreground text-sm">—</span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}

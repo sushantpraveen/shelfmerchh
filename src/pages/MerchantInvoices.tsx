@@ -22,7 +22,6 @@ const MerchantInvoices = () => {
     const [invoices, setInvoices] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [walletBalance, setWalletBalance] = useState<{ balancePaise: number; balanceRupees: string; currency: string } | null>(null);
 
     useEffect(() => {
         loadData();
@@ -32,17 +31,8 @@ const MerchantInvoices = () => {
         try {
             setIsLoading(true);
 
-            // Load invoices and wallet balance in parallel
-            const [invoicesData, balanceResponse] = await Promise.all([
-                invoiceApi.listForMerchant(),
-                walletApi.getBalance()
-            ]);
-
+            const invoicesData = await invoiceApi.listForMerchant();
             setInvoices(invoicesData || []);
-            // walletApi.getBalance returns the balance object directly
-            if (balanceResponse && balanceResponse.balancePaise !== undefined) {
-                setWalletBalance(balanceResponse);
-            }
         } catch (err: any) {
             setError(err?.message || 'Failed to load data');
         } finally {
@@ -347,33 +337,11 @@ const MerchantInvoices = () => {
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-end mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold">Wallet & Invoices</h1>
+                        <h1 className="text-3xl font-bold">Invoices</h1>
                         <p className="text-muted-foreground mt-1">
                             Manage your fulfillment costs and invoices
                         </p>
                     </div>
-                    <Card className="p-4 bg-primary/5 border-primary/20">
-                        <div className="flex items-center gap-3">
-                            <Wallet className="h-5 w-5 text-primary" />
-                            <div>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Wallet Balance</p>
-                                <p className="text-xl font-bold">
-                                    ₹{walletBalance ? walletBalance.balanceRupees : '0.00'}
-                                </p>
-                            </div>
-                            <div className="flex gap-2 ml-4">
-                                <Button size="sm" asChild>
-                                    <Link to="/wallet/top-up">Top Up</Link>
-                                </Button>
-                                <Button size="sm" variant="outline" asChild>
-                                    <Link to="/wallet/transactions">
-                                        <History className="h-3 w-3 mr-1" />
-                                        History
-                                    </Link>
-                                </Button>
-                            </div>
-                        </div>
-                    </Card>
                 </div>
 
                 {error && <p className="mb-4 text-sm text-destructive">{error}</p>}

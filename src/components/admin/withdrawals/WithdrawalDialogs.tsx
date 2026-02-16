@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, CheckCircle2, XCircle, Banknote, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, XCircle, Banknote, Loader2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminWithdrawalsApi } from '@/lib/api';
 
@@ -244,28 +244,34 @@ export const MarkPaidDialog: React.FC<MarkPaidDialogProps> = ({
 }) => {
     const [payoutReference, setPayoutReference] = useState('');
     const [notes, setNotes] = useState('');
+    const [screenshot, setScreenshot] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                setError('File size must be less than 5MB');
+                return;
+            }
+            setScreenshot(file);
+            setError(null);
+        }
+    };
 
     const handleMarkPaid = async () => {
         if (!withdrawal) return;
 
-        if (!payoutReference.trim() || payoutReference.trim().length < 3) {
-            setError('UTR/Reference is required');
-            return;
-        }
-
         setIsSubmitting(true);
         try {
             await adminWithdrawalsApi.markPaid(withdrawal.id, {
-                payoutReference: payoutReference.trim(),
+                payoutReference: payoutReference.trim() || undefined,
                 notes: notes.trim() || undefined,
+                screenshot: screenshot || undefined,
             });
             toast.success('Withdrawal marked as paid');
-            setPayoutReference('');
-            setNotes('');
-            setError(null);
-            onOpenChange(false);
+            handleClose();
             onSuccess();
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Failed to mark as paid';
@@ -279,6 +285,7 @@ export const MarkPaidDialog: React.FC<MarkPaidDialogProps> = ({
         if (!isSubmitting) {
             setPayoutReference('');
             setNotes('');
+            setScreenshot(null);
             setError(null);
             onOpenChange(false);
         }
@@ -295,7 +302,7 @@ export const MarkPaidDialog: React.FC<MarkPaidDialogProps> = ({
                         Mark as Paid
                     </DialogTitle>
                     <DialogDescription>
-                        Record the UPI transaction reference after completing the payout.
+                        Upload payment proof or enter transaction reference.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -315,8 +322,48 @@ export const MarkPaidDialog: React.FC<MarkPaidDialogProps> = ({
                         </p>
                     </div>
 
+                    {/* Screenshot Upload */}
                     <div className="space-y-2">
-                        <Label htmlFor="utr">UTR / Transaction Reference *</Label>
+                        <Label htmlFor="screenshot">Payment Screenshot (Recommended)</Label>
+                        <div className="flex items-center gap-4">
+                            <Input
+                                id="screenshot"
+                                type="file"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                                disabled={isSubmitting}
+                                className="cursor-pointer"
+                            />
+                        </div>
+                        {screenshot && (
+                            <div className="mt-2 flex items-center justify-between p-2 rounded-md border bg-muted/50">
+                                <span className="text-sm truncate max-w-[200px] flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span className="truncate">{screenshot.name}</span>
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive shrink-0"
+                                    onClick={() => setScreenshot(null)}
+                                >
+                                    <XCircle className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-background px-2 text-muted-foreground">Or</span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="utr">UTR / Transaction Reference</Label>
                         <Input
                             id="utr"
                             placeholder="e.g., 123456789012"
@@ -355,7 +402,7 @@ export const MarkPaidDialog: React.FC<MarkPaidDialogProps> = ({
                     </Button>
                     <Button
                         onClick={handleMarkPaid}
-                        disabled={isSubmitting || !payoutReference.trim()}
+                        disabled={isSubmitting}
                         className="bg-green-600 hover:bg-green-700"
                     >
                         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}

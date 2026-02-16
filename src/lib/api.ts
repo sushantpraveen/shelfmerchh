@@ -721,6 +721,7 @@ export const withdrawalApi = {
         rejectionReason?: string;
         payoutMethod: string;
         payoutReference?: string;
+        paymentScreenshotUrl?: string;
       }>;
       pagination: {
         total: number;
@@ -859,16 +860,39 @@ export const adminWithdrawalsApi = {
   },
 
   // Mark withdrawal as paid
-  markPaid: async (id: string, data: { payoutReference: string; notes?: string }) => {
-    return apiRequest<{
-      id: string;
-      status: string;
-      payoutReference: string;
-      paidAt: string;
-    }>(`/admin/withdrawals/${encodeURIComponent(id)}/mark-paid`, {
+  markPaid: async (id: string, payload: { payoutReference?: string; notes?: string; screenshot?: File }) => {
+    const token = getToken();
+    const formData = new FormData();
+
+    if (payload.payoutReference) formData.append('payoutReference', payload.payoutReference);
+    if (payload.notes) formData.append('notes', payload.notes);
+    if (payload.screenshot) formData.append('screenshot', payload.screenshot);
+
+    const response = await fetch(`${API_BASE_URL}/admin/withdrawals/${id}/mark-paid`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(errorData.message || 'Failed to mark withdrawal as paid', response.status, errorData.errors);
+    }
+
+    const json = await response.json();
+    return json as {
+      success: boolean;
+      message: string;
+      data: {
+        id: string;
+        status: string;
+        payoutReference?: string;
+        paymentScreenshotUrl?: string;
+        paidAt: string;
+      };
+    };
   },
 };
 
@@ -1359,6 +1383,37 @@ export const authApi = {
     });
   },
 
+
+  getMerchants: async (params?: { page?: number; limit?: number; search?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search && params.search.trim()) {
+      queryParams.append('search', params.search.trim());
+    }
+
+    const query = queryParams.toString();
+    return apiRequest<{
+      success: boolean;
+      count: number;
+      pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        pages: number;
+      };
+      data: Array<{
+        _id: string;
+        name: string;
+        email: string;
+        phone?: string;
+        upiId?: string;
+        createdAt: string;
+        lastLogin?: string;
+        isActive: boolean;
+      }>;
+    }>(`/auth/merchants${query ? `?${query}` : ''}`);
+
   // Post-registration verification
   sendEmailVerificationLater: async (email: string) => {
     return apiRequest<{
@@ -1400,6 +1455,7 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ otp }),
     });
+
   },
 
 };

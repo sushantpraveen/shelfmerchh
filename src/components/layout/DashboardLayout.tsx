@@ -17,6 +17,7 @@ import {
   Check,
   Menu,
   X,
+  Wallet,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -181,13 +182,23 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             </Link>
           </Button>
           <Button
+            variant={isActiveRoute('/wallet') ? 'secondary' : 'ghost'}
+            className="w-full justify-start"
+            asChild
+          >
+            <Link to="/wallet">
+              <Wallet className="mr-2 h-4 w-4" />
+              Wallet
+            </Link>
+          </Button>
+          <Button
             variant={isActiveRoute('/invoices') ? 'secondary' : 'ghost'}
             className="w-full justify-start"
             asChild
           >
             <Link to="/invoices">
               <FileText className="mr-2 h-4 w-4" />
-              Wallet & Invoices
+              Invoices
             </Link>
           </Button>
           <Button

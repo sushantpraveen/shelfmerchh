@@ -55,6 +55,7 @@ router.get('/withdrawals', protect, async (req, res) => {
             rejectionReason: r.rejectionReason,
             payoutMethod: r.payoutMethod,
             payoutReference: r.payoutReference,
+            paymentScreenshotUrl: r.paymentScreenshotUrl,
         }));
 
         res.json({
