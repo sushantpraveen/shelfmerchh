@@ -7,7 +7,8 @@ export type UserRole = 'superadmin' | 'merchant' | 'user';
 export interface User {
   id: string;
   email: string;
-  phone?: string;
+  phone?: string; // Keep phone for compatibility, mapped from phoneNumber
+  phoneNumber?: string; // Add phoneNumber to match backend
   name: string;
   role: UserRole;
   isEmailVerified: boolean;
@@ -23,8 +24,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
-  loginWithOtp: (identifier: string, otp: string, serverOtp?: string) => Promise<void>;
-  signupComplete: (data: { name: string, phone?: string, email?: string, password?: string, otp?: string, serverOtp?: string }) => Promise<void>;
+  loginWithOtp: (otpType: 'email' | 'phone', identifier: string, otp: string) => Promise<void>;
+  signupComplete: (name: string) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
   isMerchant: boolean;
@@ -120,16 +121,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithOtp = async (identifier: string, otp: string, serverOtp?: string) => {
+  const loginWithOtp = async (otpType: 'email' | 'phone', identifier: string, otp: string) => {
     try {
-      const response = await authApi.verifyLoginOtp(identifier, otp, serverOtp);
+      const response = await authApi.verifyOtp(otpType, identifier, otp);
       if (response.success && response.user) {
         localStorage.setItem('token', response.token);
         localStorage.setItem('refreshToken', response.refreshToken);
         setUser({
           id: response.user.id,
           email: response.user.email,
-          phone: response.user.phone,
+          phone: response.user.phoneNumber, // Map phoneNumber to phone for frontend compatibility if needed, or update interface
           name: response.user.name,
           role: response.user.role as UserRole,
           isEmailVerified: response.user.isEmailVerified || false,
@@ -146,29 +147,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signupComplete = async (data: { name: string, phone?: string, email?: string, password?: string, otp?: string, serverOtp?: string }) => {
+  const signupComplete = async (name: string) => {
     try {
-      const response = await authApi.completeSignupOtp(data);
-      if (response.success && response.user) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('refreshToken', response.refreshToken);
-        setUser({
-          id: response.user.id,
-          email: response.user.email,
-          phone: response.user.phone,
-          name: response.user.name,
-          role: response.user.role as UserRole,
-          isEmailVerified: response.user.isEmailVerified || false,
-          isPhoneVerified: response.user.isPhoneVerified || false,
-          createdAt: response.user.createdAt,
-          upiId: response.user.upiId
-        });
+      const response = await authApi.updateProfile(name);
+      if (response.success) {
+        // Refresh user to get full object
+        await refreshUser();
       } else {
-        throw new Error('Account creation failed');
+        throw new Error('Account update failed');
       }
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      throw new Error('Failed to create account. Please try again.');
+      throw new Error('Failed to update profile. Please try again.');
     }
   };
 

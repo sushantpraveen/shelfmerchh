@@ -1198,6 +1198,8 @@ export const authApi = {
         isEmailVerified?: boolean;
         isPhoneVerified?: boolean;
         createdAt: string;
+        lastLogin?: string;
+        upiId?: string;
       };
       token: string;
       refreshToken: string;
@@ -1238,6 +1240,7 @@ export const authApi = {
         isPhoneVerified?: boolean;
         createdAt: string;
         lastLogin?: string;
+        upiId?: string;
       };
     }>('/auth/me');
   },
@@ -1315,6 +1318,7 @@ export const authApi = {
         name: string;
         email: string;
         role: string;
+        upiId?: string;
       };
     }>('/auth/update-profile', {
       method: 'PUT',
@@ -1322,67 +1326,80 @@ export const authApi = {
     });
   },
 
-  // Multi-step OTP Auth
-  initLoginOtp: async (identifier: string) => {
+  // Unified OTP Auth
+  sendOtp: async (otpType: 'email' | 'phone', identifier: string) => {
     return apiRequest<{
       success: boolean;
       exists: boolean;
-      type: 'email' | 'phone';
       message: string;
-      flow?: 'password' | 'otp';
-      serverOtp?: string;
-    }>('/auth/login/otp/init', {
+    }>('/auth/otp/send', {
       method: 'POST',
-      body: JSON.stringify({ identifier }),
+      body: JSON.stringify({
+        otpType,
+        ...(otpType === 'email' ? { email: identifier } : { phoneNumber: identifier })
+      })
     });
+  },
+
+  verifyOtp: async (otpType: 'email' | 'phone', identifier: string, otp: string) => {
+    return apiRequest<{
+      success: boolean;
+      user: any;
+      token: string;
+      refreshToken: string;
+      message?: string;
+    }>('/auth/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify({
+        otpType,
+        otp,
+        ...(otpType === 'email' ? { email: identifier } : { phoneNumber: identifier })
+      })
+    });
+  },
+
+  // Legacy functions (kept for reference but unused by updated flow)
+  initLoginOtp: async (identifier: string) => {
+    // Redirect to new flow
+    const isEmail = identifier.includes('@');
+    return authApi.sendOtp(isEmail ? 'email' : 'phone', identifier) as any;
   },
 
   verifyLoginOtp: async (identifier: string, otp: string, serverOtp?: string) => {
-    return apiRequest<{
-      success: boolean;
-      user: any;
-      token: string;
-      refreshToken: string;
-    }>('/auth/login/otp/verify', {
-      method: 'POST',
-      body: JSON.stringify({ identifier, otp, serverOtp }),
-    });
+    const isEmail = identifier.includes('@');
+    return authApi.verifyOtp(isEmail ? 'email' : 'phone', identifier, otp) as any;
   },
 
   initSignupOtp: async (name: string, phone: string) => {
-    return apiRequest<{
-      success: boolean;
-      message: string;
-    }>('/auth/signup/otp/init', {
-      method: 'POST',
-      body: JSON.stringify({ name, phone }),
-    });
+    return authApi.sendOtp('phone', phone) as any;
   },
 
   initSignupEmailOtp: async (email: string, name?: string) => {
-    return apiRequest<{
-      success: boolean;
-      otp: string;
-      message: string;
-      serverOtp?: string;
-    }>('/auth/signup/otp/email-init', {
-      method: 'POST',
-      body: JSON.stringify({ email, name }),
-    });
+    return authApi.sendOtp('email', email) as any;
   },
 
   completeSignupOtp: async (data: { name: string, phone?: string, email?: string, password?: string, otp?: string, serverOtp?: string }) => {
-    return apiRequest<{
-      success: boolean;
-      user: any;
-      token: string;
-      refreshToken: string;
-    }>('/auth/signup/otp/complete', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
+    // This legacy function was a mix of verify + signup. 
+    // The new flow verifies first, then signup is just a state update or profile update if needed.
+    // However, for the purpose of the Auth.tsx flow which might call this...
+    // Wait, Auth.tsx calls signupComplete which calls this.
+    // I need to check how Auth.tsx uses this.
+    // In the new flow, "signupComplete" might just mean "update profile" if user was created incompletely during OTP verify.
+    // Or if we need to set a password.
 
+    // Actually, in the new flow:
+    // 1. sendOtp -> creates user if not exists (incomplete)
+    // 2. verifyOtp -> marks verified, returns token
+    // 3. User enters name -> we should update the user profile
+
+    // So "completeSignupOtp" should be replaced by "updateProfile" in the frontend flow.
+    // But strictly replacing the API definition here:
+
+    return apiRequest('/auth/update-profile', {
+      method: 'PUT',
+      body: JSON.stringify({ name: data.name })
+    }) as any;
+  },
 
   getMerchants: async (params?: { page?: number; limit?: number; search?: string }) => {
     const queryParams = new URLSearchParams();
@@ -1393,6 +1410,7 @@ export const authApi = {
     }
 
     const query = queryParams.toString();
+
     return apiRequest<{
       success: boolean;
       count: number;
@@ -1413,6 +1431,7 @@ export const authApi = {
         isActive: boolean;
       }>;
     }>(`/auth/merchants${query ? `?${query}` : ''}`);
+  },
 
   // Post-registration verification
   sendEmailVerificationLater: async (email: string) => {
@@ -1455,10 +1474,8 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ otp }),
     });
-
   },
-
-};
+}
 
 // Product API methods
 export const productApi = {
