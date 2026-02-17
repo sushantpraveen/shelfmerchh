@@ -7,6 +7,7 @@ import { getTheme } from '@/lib/themes';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStoreAuth } from '@/contexts/StoreAuthContext';
+import { useCart } from '@/contexts/CartContext';
 import { getTenantSlugFromLocation, buildStorePath } from '@/utils/tenantUtils';
 import { Loader2 } from 'lucide-react';
 import { getProductImageGroups } from '@/utils/productImageUtils';
@@ -30,8 +31,6 @@ const StoreFrontendNew = () => {
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [cartOpen, setCartOpen] = useState(false);
   const [storeProducts, setStoreProducts] = useState<any[]>([]);
   const [spLoading, setSpLoading] = useState(false);
   const [spFilter, setSpFilter] = useState<{ status?: 'draft' | 'published'; isActive?: boolean }>({
@@ -188,64 +187,15 @@ const StoreFrontendNew = () => {
     };
   }, [subdomain]);
 
-  // Cart is kept only in memory for this session; no local/session storage
-
-  const handleAddToCart = (product: Product, variant: { color: string; size: string }, quantity: number) => {
-    const existingIndex = cart.findIndex(
-      (item) =>
-        item.productId === product.id &&
-        item.variant.color === variant.color &&
-        item.variant.size === variant.size
-    );
-
-    if (existingIndex >= 0) {
-      const newCart = [...cart];
-      newCart[existingIndex].quantity += quantity;
-      setCart(newCart);
-      toast.success('Updated cart quantity');
-    } else {
-      setCart([
-        ...cart,
-        {
-          productId: product.id,
-          product,
-          quantity,
-          variant,
-        },
-      ]);
-      toast.success('Added to cart');
-    }
-  };
-
-  const handleUpdateQuantity = (productId: string, variant: any, quantity: number) => {
-    if (quantity <= 0) {
-      handleRemoveFromCart(productId, variant);
-      return;
-    }
-
-    setCart(
-      cart.map((item) =>
-        item.productId === productId &&
-          item.variant.color === variant.color &&
-          item.variant.size === variant.size
-          ? { ...item, quantity }
-          : item
-      )
-    );
-  };
-
-  const handleRemoveFromCart = (productId: string, variant: any) => {
-    setCart(
-      cart.filter(
-        (item) =>
-          !(
-            item.productId === productId &&
-            item.variant.color === variant.color &&
-            item.variant.size === variant.size
-          )
-      )
-    );
-  };
+  const {
+    cart,
+    cartCount,
+    addToCart,
+    updateQuantity,
+    removeFromCart,
+    isCartOpen,
+    setIsCartOpen
+  } = useCart();
 
   const handleProductClick = (product: Product) => {
     if (!store) return;
@@ -271,7 +221,7 @@ const StoreFrontendNew = () => {
       return;
     }
 
-    setCartOpen(false);
+    setIsCartOpen(false);
     const checkoutPath = buildStorePath('/checkout', store.subdomain);
     navigate(checkoutPath, {
       state: { cart, storeId: store.id, subdomain: store.subdomain },
@@ -331,8 +281,8 @@ const StoreFrontendNew = () => {
             { name: 'About', href: '#about' },
             { name: 'Contact', href: '/support/contact-us' },
           ]}
-          cartItemCount={cartItemCount}
-          onCartClick={() => setCartOpen(true)}
+          cartItemCount={cartCount}
+          onCartClick={() => setIsCartOpen(true)}
           primaryColor={(store as any)?.settings?.primaryColor || theme.colors.primary || '#16a34a'}
         />
       )}
@@ -401,11 +351,11 @@ const StoreFrontendNew = () => {
 
       {/* Cart Drawer */}
       <CartDrawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
+        open={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
         cart={cart}
-        onUpdateQuantity={handleUpdateQuantity}
-        onRemove={handleRemoveFromCart}
+        onUpdateQuantity={updateQuantity}
+        onRemove={removeFromCart}
         onCheckout={handleCheckout}
       />
     </div>

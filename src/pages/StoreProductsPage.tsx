@@ -9,6 +9,7 @@ import { storeApi, storeProductsApi } from '@/lib/api';
 import { getTheme } from '@/lib/themes';
 import { toast } from 'sonner';
 import { useStoreAuth } from '@/contexts/StoreAuthContext';
+import { useCart } from '@/contexts/CartContext';
 import CartDrawer from '@/components/storefront/CartDrawer';
 import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
 import EnhancedFooter from '@/components/storefront/EnhancedFooter';
@@ -70,8 +71,7 @@ const StoreProductsPage: React.FC = () => {
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [cartOpen, setCartOpen] = useState(false);
+  const { cart, cartCount, updateQuantity, removeFromCart, isCartOpen, setIsCartOpen } = useCart();
   const [loading, setLoading] = useState(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
@@ -637,36 +637,6 @@ const StoreProductsPage: React.FC = () => {
     handleProductClick(product);
   };
 
-  const handleUpdateQuantity = (productId: string, variant: any, quantity: number) => {
-    if (quantity <= 0) {
-      handleRemoveFromCart(productId, variant);
-      return;
-    }
-
-    setCart(
-      cart.map((item) =>
-        item.productId === productId &&
-          item.variant.color === variant.color &&
-          item.variant.size === variant.size
-          ? { ...item, quantity }
-          : item
-      )
-    );
-  };
-
-  const handleRemoveFromCart = (productId: string, variant: any) => {
-    setCart(
-      cart.filter(
-        (item) =>
-          !(
-            item.productId === productId &&
-            item.variant.color === variant.color &&
-            item.variant.size === variant.size
-          )
-      )
-    );
-  };
-
   const handleCheckout = () => {
     if (!store) return;
 
@@ -676,7 +646,7 @@ const StoreProductsPage: React.FC = () => {
       return;
     }
 
-    setCartOpen(false);
+    setIsCartOpen(false);
     const checkoutPath = buildStorePath('/checkout', store.subdomain);
     navigate(checkoutPath, {
       state: { cart, storeId: store.id, subdomain: store.subdomain },
@@ -786,8 +756,8 @@ const StoreProductsPage: React.FC = () => {
             { name: 'About', href: '#about' },
             { name: 'Contact', href: '/support/contact-us' },
           ]}
-          cartItemCount={cartItemCount}
-          onCartClick={() => setCartOpen(true)}
+          cartItemCount={cartCount}
+          onCartClick={() => setIsCartOpen(true)}
           onSearchClick={() => {
             const searchInput = document.getElementById('product-search');
             if (searchInput) {
@@ -1175,11 +1145,11 @@ const StoreProductsPage: React.FC = () => {
 
       {/* Cart Drawer */}
       <CartDrawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
+        open={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
         cart={cart}
-        onUpdateQuantity={handleUpdateQuantity}
-        onRemove={handleRemoveFromCart}
+        onUpdateQuantity={updateQuantity}
+        onRemove={removeFromCart}
         onCheckout={handleCheckout}
       />
     </div>

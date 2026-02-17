@@ -12,6 +12,7 @@ import { storeApi, checkoutApi, shippingApi } from '@/lib/api';
 import { useStoreAuth } from '@/contexts/StoreAuthContext';
 import { estimateCartWeight } from '@/lib/delhivery';
 import { getTenantSlugFromLocation } from '@/utils/tenantUtils';
+import { useCart } from '@/contexts/CartContext';
 
 import {
   ArrowLeft,
@@ -61,7 +62,7 @@ const StoreCheckoutPage: React.FC = () => {
 
   const locationState = location.state as { cart?: CartItem[]; storeId?: string; subdomain?: string } | null;
   const [store, setStore] = useState<Store | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const { cart, clearCart } = useCart();
   const [shippingInfo, setShippingInfo] = useState<ShippingAddress>(defaultShipping);
   const [processing, setProcessing] = useState(false);
   const [shipping, setShipping] = useState(0); // Will be calculated based on zip code
@@ -98,12 +99,7 @@ const StoreCheckoutPage: React.FC = () => {
     load();
   }, [subdomain]);
 
-  useEffect(() => {
-    // Initialize cart from navigation state; if state is missing, keep empty cart
-    if (locationState?.cart && Array.isArray(locationState.cart)) {
-      setCart(locationState.cart);
-    }
-  }, [locationState]);
+
 
   const { isAuthenticated } = useStoreAuth();
 
@@ -422,7 +418,7 @@ const StoreCheckoutPage: React.FC = () => {
             }
 
             const order = verifyResp.data;
-            setCart([]);
+            clearCart();
             toast.success('Payment successful! Order placed.');
             navigate('/order-confirmation', {
               state: {
@@ -486,8 +482,7 @@ const StoreCheckoutPage: React.FC = () => {
       }
 
       const order = resp.data;
-
-      setCart([]);
+      clearCart();
       toast.success('Order placed successfully!');
 
       navigate('/order-confirmation', {

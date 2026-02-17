@@ -21,7 +21,7 @@ const StoreAuthPage = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { login, register, isAuthenticated } = useStoreAuth();
-    
+
     // Get tenant slug from subdomain (hostname) or path parameter (fallback)
     const subdomain = getTenantSlugFromLocation(location, params) || params.subdomain;
 
@@ -44,7 +44,7 @@ const StoreAuthPage = () => {
     const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
     const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
-    const redirectPath = searchParams.get('redirect') || 'checkout';
+    const redirectPath = searchParams.get('redirect') || '';
 
     useEffect(() => {
         const loadStore = async () => {
@@ -229,7 +229,9 @@ const StoreAuthPage = () => {
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold mb-2" style={{ color: '#000000' }}>{store.storeName}</h1>
-                    <p className="text-muted-foreground">Sign in to continue to checkout</p>
+                    <p className="text-muted-foreground">
+                        {redirectPath === 'checkout' ? 'Sign in to continue to checkout' : 'Sign in to your account'}
+                    </p>
                 </div>
 
                 <div className="bg-card rounded-lg shadow-card p-6">
@@ -275,9 +277,9 @@ const StoreAuthPage = () => {
                                         Forgot password?
                                     </button>
                                 </div>
-                                <Button 
-                                    type="submit" 
-                                    className="w-full" 
+                                <Button
+                                    type="submit"
+                                    className="w-full"
                                     disabled={isLoadingAuth}
                                     style={{ backgroundColor: primaryColor }}
                                 >
@@ -300,10 +302,10 @@ const StoreAuthPage = () => {
                                     </div>
                                 </div>
 
-                                <Button 
-                                    variant="outline" 
-                                    type="button" 
-                                    className="w-full" 
+                                <Button
+                                    variant="outline"
+                                    type="button"
+                                    className="w-full"
                                     onClick={handleGoogleSignIn}
                                 >
                                     <img src={googleLogo} alt="Google" className="mr-2 h-5 w-5" />
@@ -368,10 +370,10 @@ const StoreAuthPage = () => {
                                         <p className="text-sm text-red-600">{confirmPasswordError}</p>
                                     )}
                                 </div>
-                                
-                                <Button 
-                                    type="submit" 
-                                    className="w-full" 
+
+                                <Button
+                                    type="submit"
+                                    className="w-full"
                                     disabled={isLoadingAuth}
                                     style={{ backgroundColor: primaryColor }}
                                 >
@@ -384,7 +386,7 @@ const StoreAuthPage = () => {
                                         'Sign up for Free'
                                     )}
                                 </Button>
-                                
+
                                 <div className="relative my-4">
                                     <div className="absolute inset-0 flex items-center">
                                         <span className="w-full border-t" />
@@ -394,10 +396,10 @@ const StoreAuthPage = () => {
                                     </div>
                                 </div>
 
-                                <Button 
-                                    variant="outline" 
-                                    type="button" 
-                                    className="w-full" 
+                                <Button
+                                    variant="outline"
+                                    type="button"
+                                    className="w-full"
                                     onClick={handleGoogleSignIn}
                                 >
                                     <img src={googleLogo} alt="Google" className="mr-2 h-5 w-5" />
@@ -409,8 +411,8 @@ const StoreAuthPage = () => {
                 </div>
 
                 <div className="text-center mt-6">
-                    <Button 
-                        variant="link" 
+                    <Button
+                        variant="link"
                         onClick={() => {
                             const homePath = buildStorePath('/', store.subdomain);
                             navigate(homePath);
