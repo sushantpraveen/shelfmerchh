@@ -919,7 +919,7 @@ const ListingEditor = () => {
                     <div className="flex-1">
                       <p className="text-sm font-medium">{store.name}</p>
                       {store.subdomain && (
-                        <p className="text-xs text-muted-foreground">{store.subdomain}</p>
+                        <p className="text-xs text-muted-foreground">{store.subdomain}.shelfmerch.com</p>
                       )}
                     </div>
                     <span className={`text-[10px] px-2 py-0.5 rounded ${store.status === 'active'

@@ -10,6 +10,8 @@ import { storeApi, storeProductsApi } from '@/lib/api';
 import type { Store as StoreType } from '@/types';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.webp';
+import { generateDefaultStoreData } from '@/utils/storeNameGenerator';
+
 import {
   Package,
   Store,
@@ -72,6 +74,14 @@ const Stores = () => {
   const [storeToDelete, setStoreToDelete] = useState<StoreType | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Pre-populate store name when dialog opens
+  useEffect(() => {
+    if (createStoreDialogOpen && !newStoreName) {
+      const defaultData = generateDefaultStoreData();
+      setNewStoreName(defaultData.name);
+    }
+  }, [createStoreDialogOpen]);
+
   useEffect(() => {
     const fetchStores = async () => {
       try {
@@ -95,9 +105,9 @@ const Stores = () => {
     setIsCreatingInternal(true);
     try {
       // 1. Create the store
-      const storeName = `Store ${new Date().toLocaleDateString().replace(/\//g, '-')}`;
+      const defaultData = generateDefaultStoreData();
       const createResp = await storeApi.create({
-        name: storeName,
+        name: defaultData.name,
         description: 'My ShelfMerch Pop-Up Store',
       });
 
@@ -654,7 +664,10 @@ const Stores = () => {
                 disabled={isCreatingStore}
               />
               <p className="text-xs text-muted-foreground">
-                This will be the display name of your store
+                This will be the display name of your store. Your subdomain will be:
+                <span className="font-mono font-bold text-primary ml-1">
+                  {newStoreName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'your-store'}.shelfmerch.com
+                </span>
               </p>
             </div>
             <div className="space-y-2">

@@ -30,6 +30,8 @@ import { DisplacementSettingsPanel } from '@/components/designer/DisplacementSet
 import type { DisplacementSettings, DesignPlacement, ViewKey } from '@/types/product';
 import { API_BASE_URL, RAW_API_URL } from '@/config';
 import { pixelsToNormalized, createDefaultPlacement, type PrintAreaPixels } from '@/lib/placementUtils';
+import { generateDefaultStoreData } from '@/utils/storeNameGenerator';
+
 
 // Types
 interface CanvasElement {
@@ -2413,8 +2415,9 @@ const DesignEditor: React.FC = () => {
 
         if (!hasStore) {
           try {
+            const defaultData = generateDefaultStoreData();
             await storeApi.create({
-              name: 'New Store',
+              name: defaultData.name,
               description: 'My first store'
             });
             toast.success('Default store created automatically.');

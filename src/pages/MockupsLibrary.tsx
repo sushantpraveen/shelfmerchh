@@ -1919,7 +1919,7 @@ const MockupsLibrary = () => {
         const savedUrls: Record<string, string> = {};
         let successCount = 0;
 
-        toast.info(`Saving ${allMockupsToSave.length} mockup previews across ${allColorMockups.length} color(s)...`);
+        toast.info(`Saving ${totalMockups} mockup previews across ${allColorMockups.length} color(s)...`);
 
         for (const { color, mockup } of allMockupsToSave) {
             const mockupKey = `${color}:${mockup.id}`;
@@ -1957,7 +1957,7 @@ const MockupsLibrary = () => {
         if (successCount === allMockupsToSave.length) {
             toast.success(`All ${successCount} model mockups saved for ${allColorMockups.length} color(s)!`);
         } else {
-            toast.warning(`Saved ${successCount} of ${allMockupsToSave.length} previews`);
+            toast.warning(`Saved ${successCount} of ${totalMockups} previews`);
         }
     }, [storeProductId, allColorMockups, captureWebGLPreview]);
 
@@ -2400,7 +2400,7 @@ const MockupsLibrary = () => {
 
                         {/* CTA Button */}
                         {allColorMockups.length > 0 && Object.keys(savedMockupUrls).length > 0 && (
-                            <div className="flex justify-center pt-8 pb-12">
+                            <div className="flex justify-end pt-8 pb-12">
                                 <Button
                                     size="lg"
                                     className="px-10 py-6 text-lg font-bold gap-3 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-105 bg-gradient-to-r from-primary to-primary/80"
@@ -2414,7 +2414,7 @@ const MockupsLibrary = () => {
                                         });
                                     }}
                                 >
-                                    Continue to Listing Editor
+                                    Continue
                                     <ChevronRight className="h-6 w-6" />
                                 </Button>
                             </div>

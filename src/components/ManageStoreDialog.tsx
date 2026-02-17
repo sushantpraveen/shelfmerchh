@@ -125,11 +125,10 @@ const ManageStoreDialog: React.FC<ManageStoreDialogProps> = ({ open, onClose, st
                 {Object.values(themes).map((theme) => (
                   <Card
                     key={theme.id}
-                    className={`p-3 cursor-pointer transition-all ${
-                      selectedTheme === theme.id
+                    className={`p-3 cursor-pointer transition-all ${selectedTheme === theme.id
                         ? 'ring-2 ring-primary border-primary'
                         : 'hover:border-primary/50'
-                    }`}
+                      }`}
                     onClick={() => setSelectedTheme(theme.id)}
                   >
                     <p className="font-semibold text-sm mb-1">{theme.name}</p>

@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/api';
 
+import logo from '@/assets/logo.webp';
+
 const VerifyPhone: React.FC = () => {
     const navigate = useNavigate();
     const { refreshUser } = useAuth();
@@ -79,12 +81,15 @@ const VerifyPhone: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-            <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-                <h2 className="text-2xl font-bold text-center mb-6">Verify Your Phone Number</h2>
+        <div className="min-h-screen flex items-center justify-center bg-white px-4">
+            <div className="max-w-md w-full p-8 border border-gray-100 rounded-2xl shadow-sm">
+                <div className="flex flex-col items-center mb-8">
+                    <img src={logo} alt="ShelfMerch Logo" className="h-12 mb-6" />
+                    <h2 className="text-2xl font-bold text-black text-center">Verify Your Phone</h2>
+                </div>
 
                 {step === 'PHONE' ? (
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <div>
                             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
                                 Phone Number
@@ -95,22 +100,22 @@ const VerifyPhone: React.FC = () => {
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 placeholder="Enter your phone number"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                                 disabled={isLoading}
                             />
                         </div>
                         <button
                             onClick={handleSendOtp}
                             disabled={isLoading}
-                            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                            className="w-full bg-primary text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:bg-gray-200 disabled:cursor-not-allowed transition-all shadow-md active:scale-[0.98]"
                         >
                             {isLoading ? 'Sending...' : 'Send OTP'}
                         </button>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        <p className="text-sm text-gray-600 text-center">
-                            Enter the 6-digit code sent to {phone}
+                    <div className="space-y-6">
+                        <p className="text-sm text-gray-500 text-center">
+                            Enter the 6-digit code sent to <span className="text-black font-medium">{phone}</span>
                         </p>
                         <div className="flex justify-center gap-2">
                             {otp.map((digit, index) => (
@@ -122,7 +127,7 @@ const VerifyPhone: React.FC = () => {
                                     value={digit}
                                     onChange={(e) => handleOtpChange(index, e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(index, e)}
-                                    className="w-12 h-12 text-center text-xl border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-12 h-12 text-center text-xl font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                                     disabled={isLoading}
                                 />
                             ))}
@@ -130,26 +135,28 @@ const VerifyPhone: React.FC = () => {
                         <button
                             onClick={handleVerifyOtp}
                             disabled={isLoading}
-                            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                            className="w-full bg-primary text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:bg-gray-200 disabled:cursor-not-allowed transition-all shadow-md active:scale-[0.98]"
                         >
                             {isLoading ? 'Verifying...' : 'Verify Phone'}
                         </button>
                         <button
                             onClick={() => setStep('PHONE')}
                             disabled={isLoading}
-                            className="w-full text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+                            className="w-full text-gray-500 text-sm hover:text-black transition-colors"
                         >
                             Change Phone
                         </button>
                     </div>
                 )}
 
-                <button
-                    onClick={() => navigate('/dashboard')}
-                    className="w-full mt-4 text-gray-600 py-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                    Skip for now
-                </button>
+                <div className="mt-8 flex justify-center">
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="text-gray-400 text-sm hover:text-gray-600 transition-colors"
+                    >
+                        Skip for now
+                    </button>
+                </div>
             </div>
         </div>
     );
