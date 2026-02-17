@@ -33,6 +33,7 @@ interface SectionRendererProps {
   section: BuilderSection;
   products?: Product[];
   isPreview?: boolean;
+  previewMode?: 'desktop' | 'tablet' | 'mobile';
   globalStyles?: any;
   onProductClick?: (product: Product) => void;
   storeSlug?: string;
@@ -172,7 +173,7 @@ const ProductCard: React.FC<{
   if (layout === 'list') {
     return (
       <Card
-        className={cn('p-4 transition-shadow flex gap-4', onClick && 'cursor-pointer hover:shadow-lg')}
+        className={cn('p-3 sm:p-4 transition-shadow flex gap-3 sm:gap-4', onClick && 'cursor-pointer hover:shadow-lg')}
         onClick={onClick}
       >
         <div className="w-24 h-24 bg-muted rounded flex-shrink-0 flex items-center justify-center overflow-hidden">
@@ -182,13 +183,13 @@ const ProductCard: React.FC<{
             <Package className="h-8 w-8 text-muted-foreground" />
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold truncate">{product.name}</h3>
+        <div className="flex-1 min-w-0 overflow-hidden w-full">
+          <h3 className="font-semibold truncate break-all">{product.name}</h3>
           {product.description && (
-            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{product.description}</p>
+            <p className="text-sm text-muted-foreground line-clamp-2 mt-1 break-words [overflow-wrap:anywhere]">{product.description}</p>
           )}
           {showPrice && (
-            <p className="text-lg font-bold mt-2">{formatPrice(product.price)}</p>
+            <p className="text-lg font-bold mt-2 whitespace-nowrap">{formatPrice(product.price)}</p>
           )}
         </div>
         {showAddToCart && (
@@ -203,7 +204,7 @@ const ProductCard: React.FC<{
   // Grid and Carousel cards
   return (
     <Card
-      className={cn('p-4 transition-shadow', onClick && 'cursor-pointer hover:shadow-lg')}
+      className={cn('p-3 sm:p-4 transition-shadow', onClick && 'cursor-pointer hover:shadow-lg')}
       onClick={onClick}
     >
       <div className="aspect-square bg-muted mb-4 rounded flex items-center justify-center overflow-hidden">
@@ -213,7 +214,7 @@ const ProductCard: React.FC<{
           <Package className="h-12 w-12 text-muted-foreground" />
         )}
       </div>
-      <h3 className="font-semibold line-clamp-2">{product.name}</h3>
+      <h3 className="font-semibold line-clamp-2 break-words [overflow-wrap:anywhere]">{product.name}</h3>
       {showPrice && (
         <p className="text-lg font-bold mt-2">{formatPrice(product.price)}</p>
       )}
@@ -291,6 +292,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
   section,
   products = [],
   isPreview = false,
+  previewMode = 'desktop',
   globalStyles,
   onProductClick,
   storeSlug,
@@ -357,9 +359,12 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
     margin: section.styles.margin
       ? `${section.styles.margin.top}px ${section.styles.margin.right}px ${section.styles.margin.bottom}px ${section.styles.margin.left}px`
       : '0',
-    textAlign,
+    width: '100%',
     maxWidth: '100%',
     borderRadius: section.styles.borderRadius || undefined,
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+    boxSizing: 'border-box',
   } as React.CSSProperties;
 
   // Header is a special case: keep padding compact for clean mobile view
@@ -371,10 +376,13 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
       }
       : sectionStyle;
 
+  const isMobileView = isPreview ? previewMode === 'mobile' : false;
+  const isTabletView = isPreview ? (previewMode === 'tablet' || previewMode === 'mobile') : false;
+
   const innerStyle =
     section.styles.maxWidth && section.styles.maxWidth !== '100%'
-      ? { maxWidth: section.styles.maxWidth, margin: '0 auto' }
-      : undefined;
+      ? { maxWidth: isTabletView ? '100%' : section.styles.maxWidth, margin: '0 auto', width: '100%' }
+      : { width: '100%' };
 
   switch (section.type) {
     case 'header':
@@ -427,8 +435,11 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
                   )}
                 </div>
 
-                {/* Center: Nav links */}
-                <nav className="hidden md:flex items-center justify-center gap-8 flex-1">
+                {/* Center: Nav links - Hidden on mobile preview or real mobile */}
+                <nav className={cn(
+                  "hidden lg:flex items-center justify-center gap-8 flex-1",
+                  isTabletView && "lg:hidden"
+                )}>
                   {nav.showProducts !== false && (
                     <Link
                       to={productsHref}
@@ -484,7 +495,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
                 </nav>
 
                 {/* Right: Search + Cart icons */}
-                <div className="flex items-center justify-end gap-3 min-w-[140px]">
+                <div className="flex items-center justify-end gap-1 sm:gap-3 min-w-0 sm:min-w-[140px]">
                   {section.settings.showSearch !== false && (
                     <Link
                       to={productsHref}
@@ -579,8 +590,11 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
     case 'hero':
       return (
         <div style={sectionStyle}>
-          <div className="container mx-auto" style={{ ...innerStyle, textAlign }}>
-            <h1 className="text-5xl font-bold mb-4">{section.settings.heading}</h1>
+          <div className="container mx-auto px-4" style={{ ...innerStyle, textAlign }}>
+            <h1 className={cn(
+              "font-bold mb-4",
+              isMobileView ? "text-3xl" : "text-5xl"
+            )}>{section.settings.heading}</h1>
             {section.settings.subheading && (
               <p className="text-xl mb-8">{section.settings.subheading}</p>
             )}
@@ -709,13 +723,13 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
               // Grid layout
               <div
                 className={cn(
-                  "grid gap-6",
-                  // Mobile: Always 1 column for consistent mobile experience
-                  "grid-cols-1",
-                  // Tablet/Desktop: Use configured columns
-                  columns === 2 && "md:grid-cols-2",
-                  columns === 3 && "md:grid-cols-3",
-                  columns === 4 && "md:grid-cols-4"
+                  "grid gap-4 lg:gap-6",
+                  // Force 1 column on mobile preview
+                  isMobileView ? "grid-cols-1" : (
+                    columns === 2 ? "grid-cols-2" :
+                      columns === 3 ? "grid-cols-2 lg:grid-cols-3" :
+                        "grid-cols-2 lg:grid-cols-4"
+                  )
                 )}
               >
                 {displayProducts.map((product) => (
@@ -817,10 +831,13 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
         <div style={sectionStyle}>
           <div className="container mx-auto" style={innerStyle}>
             {section.settings.heading && (
-              <h2 className="text-3xl font-bold mb-4">{section.settings.heading}</h2>
+              <h2 className={cn(
+                "font-bold mb-4",
+                isMobileView ? "text-2xl" : "text-3xl"
+              )}>{section.settings.heading}</h2>
             )}
             {section.settings.description && (
-              <p className="text-muted-foreground mb-8">{section.settings.description}</p>
+              <p className="text-muted-foreground mb-8 text-sm sm:text-base">{section.settings.description}</p>
             )}
 
             <div className="space-y-12">
@@ -865,7 +882,10 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
                       />
                     ) : (
                       // Grid layout
-                      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      <div className={cn(
+                        "grid gap-4 sm:gap-6",
+                        isMobileView ? "grid-cols-1" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                      )}>
                         {collectionProducts.map((product) => (
                           <ProductCard
                             key={product.id}
@@ -982,8 +1002,11 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
           <div style={sectionStyle}>
             <div className="container mx-auto" style={innerStyle}>
               <div
-                className="grid gap-4"
-                style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}
+                className={cn(
+                  "grid gap-4",
+                  isMobileView ? "grid-cols-1" : `grid-cols-2 sm:grid-cols-${gridColumns}`
+                )}
+                style={!isMobileView ? { gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` } : {}}
               >
                 {images.map((img, index) => renderImage(img, index))}
               </div>
@@ -1180,7 +1203,10 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
       return (
         <div style={sectionStyle}>
           <div className="container mx-auto" style={innerStyle}>
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <div className={cn(
+              "grid gap-8",
+              isMobileView ? "grid-cols-1" : "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]"
+            )}>
               <div className="rounded-xl border border-dashed border-muted-foreground/40 bg-muted/40 aspect-square flex items-center justify-center">
                 <Package className="h-12 w-12 text-muted-foreground" />
               </div>
@@ -1192,7 +1218,10 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
                   </span>
                 )}
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-bold">Product name</h2>
+                  <h2 className={cn(
+                    "font-bold break-words [overflow-wrap:anywhere]",
+                    isMobileView ? "text-2xl" : "text-3xl"
+                  )}>Product name</h2>
                   {section.settings.tagline && (
                     <p className="text-sm text-muted-foreground">{section.settings.tagline}</p>
                   )}
@@ -1275,7 +1304,10 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
               />
             ) : (
               // Grid layout (default)
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className={cn(
+                "grid gap-4",
+                isMobileView ? "grid-cols-1" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+              )}>
                 {displayProducts.map((product) => (
                   <ProductCard
                     key={product.id}

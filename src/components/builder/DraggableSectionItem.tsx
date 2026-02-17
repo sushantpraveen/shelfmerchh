@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 interface DraggableSectionItemProps {
   section: BuilderSection;
   products: Product[];
+  previewMode?: 'desktop' | 'tablet' | 'mobile';
   globalStyles: any;
   onEdit: (section: BuilderSection) => void;
   onRemove: (sectionId: string) => void;
@@ -22,6 +23,7 @@ interface DraggableSectionItemProps {
 const DraggableSectionItem: React.FC<DraggableSectionItemProps> = ({
   section,
   products,
+  previewMode = 'desktop',
   globalStyles,
   onEdit,
   onRemove,
@@ -61,6 +63,7 @@ const DraggableSectionItem: React.FC<DraggableSectionItemProps> = ({
           products={products}
           globalStyles={globalStyles}
           isPreview={true}
+          previewMode={previewMode}
         />
       </div>
 
