@@ -31,12 +31,14 @@ import {
   Home,
   Package,
   Zap,
-  Menu
+  Menu,
+  User
 } from 'lucide-react';
 import { Product, Store, CartItem } from '@/types';
 import { getTheme } from '@/lib/themes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStoreAuth } from '@/contexts/StoreAuthContext';
+import { useCart } from '@/contexts/CartContext';
 import { toast } from 'sonner';
 import CartDrawer from '@/components/storefront/CartDrawer';
 import SectionRenderer from '@/components/builder/SectionRenderer';
@@ -44,6 +46,8 @@ import { BuilderSection } from '@/types/builder';
 import ImageMagnifier from '@/components/storefront/ImageMagnifier';
 import { cn } from '@/lib/utils';
 import ReviewsSection from '@/components/reviews/ReviewsSection';
+import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
+import EnhancedFooter from '@/components/storefront/EnhancedFooter';
 
 const mockReviews = [
   {
@@ -95,6 +99,7 @@ const StoreProductPage = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { cart, cartCount, addToCart, updateQuantity, removeFromCart, isCartOpen, setIsCartOpen } = useCart();
 
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -103,8 +108,7 @@ const StoreProductPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
 
-  const [cartOpen, setCartOpen] = useState(false);
-  const [cart, setCart] = useState<CartItem[]>([]);
+
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [showStickyBar, setShowStickyBar] = useState(false);
 
@@ -484,77 +488,19 @@ const StoreProductPage = () => {
     }
   }, [selectedColor, colorToSizesMap, selectedSize]);
 
-  const handleAddToCart = useCallback(() => {
+  const handleAddToCartClick = useCallback(() => {
     if (!product) return;
     if (!selectedColor || !selectedSize) {
       toast.error('Please choose a color and size');
       return;
     }
 
-    const colorMap = variantPriceMap[selectedColor];
-    const unitPrice =
-      (colorMap && typeof colorMap[selectedSize] === 'number'
-        ? colorMap[selectedSize]
-        : product.price);
+    addToCart(product, { color: selectedColor, size: selectedSize }, quantity);
+  }, [product, quantity, selectedColor, selectedSize, addToCart]);
 
-    const newItem: CartItem = {
-      productId: product.id,
-      product: { ...product, price: unitPrice },
-      quantity,
-      variant: { color: selectedColor, size: selectedSize },
-    };
 
-    setCart((prev) => {
-      const existingIndex = prev.findIndex(
-        (item) =>
-          item.productId === newItem.productId &&
-          item.variant.color === newItem.variant.color &&
-          item.variant.size === newItem.variant.size,
-      );
 
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex].quantity += newItem.quantity;
-        toast.success('Updated cart quantity');
-        return updated;
-      }
-
-      toast.success('Added to cart');
-      return [...prev, newItem];
-    });
-  }, [product, quantity, selectedColor, selectedSize, variantPriceMap]);
-
-  const handleUpdateQuantity = (productIdValue: string, variant: any, nextQuantity: number) => {
-    if (nextQuantity <= 0) {
-      handleRemoveFromCart(productIdValue, variant);
-      return;
-    }
-
-    setCart((prev) =>
-      prev.map((item) =>
-        item.productId === productIdValue &&
-          item.variant.color === variant.color &&
-          item.variant.size === variant.size
-          ? { ...item, quantity: nextQuantity }
-          : item,
-      ),
-    );
-  };
-
-  const handleRemoveFromCart = (productIdValue: string, variant: any) => {
-    setCart((prev) =>
-      prev.filter(
-        (item) =>
-          !(
-            item.productId === productIdValue &&
-            item.variant.color === variant.color &&
-            item.variant.size === variant.size
-          ),
-      ),
-    );
-  };
-
-  const { isAuthenticated } = useStoreAuth();
+  const { isAuthenticated, isLoading: isAuthLoading } = useStoreAuth();
 
   const galleryImages = useMemo(() => {
     if (!product) return [];
@@ -605,44 +551,14 @@ const StoreProductPage = () => {
       return;
     }
 
-    const colorMap = variantPriceMap[selectedColor];
-    const unitPrice =
-      (colorMap && typeof colorMap[selectedSize] === 'number'
-        ? colorMap[selectedSize]
-        : product.price);
-
-    const buyNowItem: CartItem = {
-      productId: product.id,
-      product: { ...product, price: unitPrice },
-      quantity: 1,
-      variant: { color: selectedColor, size: selectedSize },
-    };
-
-    // Build next cart state with this item at quantity = 1 (no duplicates)
-    const nextCart: CartItem[] = (() => {
-      const existingIndex = cart.findIndex(
-        (item) =>
-          item.productId === buyNowItem.productId &&
-          item.variant.color === buyNowItem.variant.color &&
-          item.variant.size === buyNowItem.variant.size,
-      );
-
-      if (existingIndex >= 0) {
-        const updated = [...cart];
-        updated[existingIndex] = { ...buyNowItem };
-        return updated;
-      }
-
-      return [...cart, buyNowItem];
-    })();
-
-    setCart(nextCart);
+    addToCart(product, { color: selectedColor, size: selectedSize }, 1);
+    setIsCartOpen(false);
 
     if (isAuthenticated) {
       const checkoutPath = buildStorePath('/checkout', store.subdomain);
       navigate(checkoutPath, {
         state: {
-          cart: nextCart,
+          cart,
           storeId: store.id,
           subdomain: store.subdomain,
           from: '/checkout',
@@ -653,7 +569,7 @@ const StoreProductPage = () => {
       const authPath = buildStorePath('/auth?redirect=checkout', store.subdomain);
       navigate(authPath, {
         state: {
-          cart: nextCart,
+          cart,
           storeId: store.id,
           subdomain: store.subdomain,
           from: '/checkout',
@@ -1101,7 +1017,7 @@ const StoreProductPage = () => {
               <Button
                 size="lg"
                 className="flex-1 text-base font-semibold shadow-md active:scale-[0.98] transition-all"
-                onClick={handleAddToCart}
+                onClick={handleAddToCartClick}
               >
                 <ShoppingCart className="w-5 h-5 mr-2" />
                 Add to Cart
@@ -1267,20 +1183,36 @@ const StoreProductPage = () => {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Continue Shopping
             </Button>
+            <div className="flex items-center gap-1">
+              {isAuthLoading ? (
+                <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
+              ) : isAuthenticated ? (
+                /* Profile icon will be added here later. */
+                <div className="w-8" />
+              ) : (
+                <Link
+                  to={buildStorePath('/auth?redirect=checkout', store.subdomain)}
+                  className="hidden md:inline-flex px-3 py-1.5 text-sm font-medium hover:text-primary transition-colors"
+                >
+                  Login
+                </Link>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="icon"
               className="relative"
-              onClick={() => setCartOpen(true)}
+              onClick={() => setIsCartOpen(true)}
               style={{ color: section?.styles?.color }}
             >
               <ShoppingCart className="h-5 w-5" />
-              {cart.length > 0 && (
+              {cartCount > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium animate-scale-in">
-                  {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                  {cartCount}
                 </span>
               )}
             </Button>
+
           </div>
         </div>
       </header>
@@ -1681,7 +1613,7 @@ const StoreProductPage = () => {
             <span className="text-xl font-bold hidden sm:block" style={{ color: theme.colors.primary }}>
               ₹{effectivePrice.toFixed(2)}
             </span>
-            <Button size="lg" onClick={handleAddToCart} className="gap-2">
+            <Button size="lg" onClick={handleAddToCartClick} className="gap-2">
               <ShoppingCart className="h-4 w-4" />
               <span className="hidden sm:inline">Add to Cart</span>
               <span className="sm:hidden">Add</span>
@@ -1691,11 +1623,11 @@ const StoreProductPage = () => {
       </div>
 
       <CartDrawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
+        open={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
         cart={cart}
-        onUpdateQuantity={handleUpdateQuantity}
-        onRemove={handleRemoveFromCart}
+        onUpdateQuantity={updateQuantity}
+        onRemove={removeFromCart}
         onCheckout={handleCheckout}
       />
     </div>

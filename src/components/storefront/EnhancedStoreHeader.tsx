@@ -1,4 +1,5 @@
-import { Search, ShoppingBag, Menu, X } from "lucide-react";
+import { Search, ShoppingBag, Menu, X, User } from "lucide-react";
+import { useStoreAuth } from "@/contexts/StoreAuthContext";
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { buildStorePath } from "@/utils/tenantUtils";
@@ -13,10 +14,10 @@ interface EnhancedStoreHeaderProps {
   storeSlug?: string;
 }
 
-const EnhancedStoreHeader = ({ 
+const EnhancedStoreHeader = ({
   storeName,
   navLinks: propNavLinks,
-  cartItemCount, 
+  cartItemCount,
   onCartClick,
   onSearchClick,
   primaryColor,
@@ -25,6 +26,7 @@ const EnhancedStoreHeader = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading } = useStoreAuth();
 
   const navLinks = propNavLinks || [
     { name: "Products", href: "#products" },
@@ -35,16 +37,16 @@ const EnhancedStoreHeader = ({
   // Handle hash navigation: navigate to home first if needed, then scroll to section
   const handleHashNavigation = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (!href.startsWith('#')) return; // Not a hash link, let default behavior handle it
-    
+
     e.preventDefault();
     const hash = href;
     const storeHome = storeSlug ? buildStorePath('/', storeSlug) : '/';
     const currentPath = location.pathname;
-    
+
     // Check if we're already on the home page
-    const isOnHomePage = currentPath === storeHome || currentPath === '/' || 
-                        (storeSlug && currentPath === `/store/${storeSlug}`);
-    
+    const isOnHomePage = currentPath === storeHome || currentPath === '/' ||
+      (storeSlug && currentPath === `/store/${storeSlug}`);
+
     if (isOnHomePage) {
       // Already on home page, just scroll to section
       const element = document.querySelector(hash);
@@ -62,7 +64,7 @@ const EnhancedStoreHeader = ({
         }
       }, 100);
     }
-    
+
     // Close mobile menu if open
     setIsMenuOpen(false);
   };
@@ -96,7 +98,7 @@ const EnhancedStoreHeader = ({
           <div className="flex items-center justify-between h-16 lg:h-20">
             {/* Logo */}
             <Link to={storeSlug ? buildStorePath('/', storeSlug) : "/"} className="flex items-center gap-2">
-              <span 
+              <span
                 className="font-display text-2xl lg:text-3xl font-semibold text-foreground tracking-tight"
                 style={{ color: primaryColor || '#16a34a' }}
               >
@@ -109,7 +111,7 @@ const EnhancedStoreHeader = ({
               {navLinks.map((link) => {
                 const isHashLink = link.href.startsWith('#');
                 const isExternal = link.href.startsWith('http');
-                
+
                 if (isHashLink) {
                   return (
                     <a
@@ -122,7 +124,7 @@ const EnhancedStoreHeader = ({
                     </a>
                   );
                 }
-                
+
                 if (isExternal) {
                   return (
                     <a
@@ -136,7 +138,7 @@ const EnhancedStoreHeader = ({
                     </a>
                   );
                 }
-                
+
                 return (
                   <Link
                     key={link.name}
@@ -150,7 +152,7 @@ const EnhancedStoreHeader = ({
             </nav>
 
             {/* Right Actions */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 lg:gap-4 font-display">
               <button
                 className="p-2 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Search"
@@ -158,6 +160,7 @@ const EnhancedStoreHeader = ({
               >
                 <Search className="w-5 h-5" />
               </button>
+
               <button
                 className="p-2 text-muted-foreground hover:text-foreground transition-colors relative"
                 aria-label="Cart"
@@ -170,6 +173,22 @@ const EnhancedStoreHeader = ({
                   </span>
                 )}
               </button>
+
+              {/* Authentication Entry */}
+              {isLoading ? (
+                <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
+              ) : isAuthenticated ? (
+                /* Profile icon will be added here later. */
+                <div className="w-8" />
+              ) : (
+                <Link
+                  to={storeSlug ? buildStorePath('/auth?redirect=checkout', storeSlug) : "/auth?redirect=checkout"}
+                  className="hidden md:inline-flex btn-outline-store bg-background text-foreground hover:bg-foreground hover:text-background px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300"
+                >
+                  Login / Sign Up
+                </Link>
+              )}
+
               <button
                 className="p-2 text-muted-foreground hover:text-foreground transition-colors md:hidden"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -188,7 +207,7 @@ const EnhancedStoreHeader = ({
               {navLinks.map((link) => {
                 const isHashLink = link.href.startsWith('#');
                 const isExternal = link.href.startsWith('http');
-                
+
                 if (isHashLink) {
                   return (
                     <a
@@ -204,7 +223,7 @@ const EnhancedStoreHeader = ({
                     </a>
                   );
                 }
-                
+
                 if (isExternal) {
                   return (
                     <a
@@ -219,7 +238,7 @@ const EnhancedStoreHeader = ({
                     </a>
                   );
                 }
-                
+
                 return (
                   <Link
                     key={link.name}

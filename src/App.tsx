@@ -37,7 +37,7 @@ import StoreFrontendNew from "./pages/StoreFrontendNew";
 import StoreProductsPage from "./pages/StoreProductsPage";
 import StoreProductPage from "./pages/StoreProductPage";
 import StoreCheckoutPage from "./pages/StoreCheckoutPage";
-import StoreCustomerAccountPage from "./pages/StoreCustomerAccountPage";
+// import StoreCustomerAccountPage from "./pages/StoreCustomerAccountPage";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import BuilderDemo from "./pages/BuilderDemo";
 import NotFound from "./pages/NotFound";
