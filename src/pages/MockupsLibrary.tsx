@@ -2332,7 +2332,7 @@ const MockupsLibrary = () => {
                                                                     )}
 
                                                                     {/* Mockup Image - Larger with 4:5 aspect ratio */}
-                                                                    <div className="aspect-[4/5] relative bg-white overflow-hidden">
+                                                                    <div className="aspect-[4/3] relative bg-white overflow-hidden">
                                                                         {mockup.imageUrl && hasPlaceholder && catalogPhysicalDimensions ? (
                                                                             <div
                                                                                 ref={(el) => { webglContainerRefs.current[mockupKey] = el; }}
