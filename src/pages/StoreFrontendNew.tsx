@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useStoreAuth } from '@/contexts/StoreAuthContext';
 import { getTenantSlugFromLocation, buildStorePath } from '@/utils/tenantUtils';
 import { Loader2 } from 'lucide-react';
+import { getProductImageGroups } from '@/utils/productImageUtils';
 import CartDrawer from '@/components/storefront/CartDrawer';
 import SectionRenderer from '@/components/builder/SectionRenderer';
 import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
@@ -64,25 +65,20 @@ const StoreFrontendNew = () => {
                   ? sp.price
                   : 0;
 
-            // Extract previewImagesByView from designData
-            // previewImagesByView is an object with mockup IDs as keys and image URLs as values
-            const previewImagesByView = sp.designData?.previewImagesByView || sp.previewImagesByView || {};
-            const previewImageUrls = Object.values(previewImagesByView).filter((url): url is string =>
-              typeof url === 'string' && url.length > 0
-            );
-
-            // Use first preview image as primary, fallback to galleryImages if no previews
-            const primaryImage = previewImageUrls[0] ||
-              sp.galleryImages?.find((img: any) => img.isPrimary)?.url ||
-              (Array.isArray(sp.galleryImages) && sp.galleryImages[0]?.url) ||
-              undefined;
-
             // Extract catalog product data (populated from backend)
             const catalogProduct = sp.catalogProductId && typeof sp.catalogProductId === 'object'
               ? sp.catalogProductId
               : null;
             const catalogProductId = catalogProduct?._id?.toString() ||
               (typeof sp.catalogProductId === 'string' ? sp.catalogProductId : '');
+
+            // Apply refined image ordering logic: Group A (Designed) then Group B (Plain)
+            // We pass the full StoreProduct which now includes catalogProduct
+            const spWithCatalog = { ...sp, catalogProduct };
+            const { allImages } = getProductImageGroups(spWithCatalog);
+
+            // The very first image (hero) must always be a designed mockup if available
+            const primaryImage = allImages[0] || undefined;
 
             return {
               id,
@@ -94,12 +90,7 @@ const StoreFrontendNew = () => {
               compareAtPrice:
                 typeof sp.compareAtPrice === 'number' ? sp.compareAtPrice : undefined,
               mockupUrl: primaryImage,
-              // Use previewImagesByView URLs first, fallback to galleryImages if no previews
-              mockupUrls: previewImageUrls.length > 0
-                ? previewImageUrls
-                : (Array.isArray(sp.galleryImages)
-                  ? sp.galleryImages.map((img: any) => img.url).filter(Boolean)
-                  : []),
+              mockupUrls: allImages,
               designs: sp.designData?.designs || {},
               designBoundaries: sp.designData?.designBoundaries,
               variants: {

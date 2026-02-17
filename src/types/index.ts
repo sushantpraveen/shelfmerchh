@@ -20,6 +20,7 @@ export interface Product {
     front?: { x: number; y: number; width: number; height: number };
     back?: { x: number; y: number; width: number; height: number };
   };
+  designData?: any;
   variants: {
     colors: string[];
     sizes: string[];
@@ -36,6 +37,7 @@ export interface Product {
     subcategoryIds?: string[];
     productTypeCode?: string;
     attributes?: Record<string, any>;
+    sampleMockups?: any[];
   };
   createdAt: string;
   updatedAt: string;

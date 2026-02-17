@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
+import { getProductImageGroups } from '@/utils/productImageUtils';
 import { getTenantSlugFromLocation, buildStorePath } from '@/utils/tenantUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,10 +84,13 @@ const StoreProductsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   // FilterSidebar state (matching CategoryProducts pattern)
-  const [availableMaterials, setAvailableMaterials] = useState<string[]>([]);
+  const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
   const [availableColors, setAvailableColors] = useState<string[]>([]);
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
-  const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
+  const [availableMaterials, setAvailableMaterials] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
 
@@ -124,6 +128,15 @@ const StoreProductsPage: React.FC = () => {
         );
         setSelectedSizes(normalized);
       }
+      if (Array.isArray(data.selectedTags)) {
+        const normalized = data.selectedTags.map((t: string) =>
+          typeof t === 'string' ? t.trim().toLowerCase() : String(t).trim().toLowerCase()
+        );
+        setSelectedTags(normalized);
+      }
+      if (Array.isArray(data.priceRange) && data.priceRange.length === 2) {
+        setPriceRange(data.priceRange);
+      }
     } catch (e) {
       console.error('Failed to restore store filters from sessionStorage', e);
     }
@@ -137,6 +150,8 @@ const StoreProductsPage: React.FC = () => {
       selectedMaterials?: string[];
       selectedColors?: string[];
       selectedSizes?: string[];
+      selectedTags?: string[];
+      priceRange?: [number, number];
     }) => {
       if (!subdomain) return;
       const categories = overrides?.selectedCategories ?? selectedCategories;
@@ -144,6 +159,8 @@ const StoreProductsPage: React.FC = () => {
       const materials = overrides?.selectedMaterials ?? selectedMaterials;
       const colors = overrides?.selectedColors ?? selectedColors;
       const sizes = overrides?.selectedSizes ?? selectedSizes;
+      const tags = overrides?.selectedTags ?? selectedTags;
+      const price = overrides?.priceRange ?? priceRange;
 
       const payload = {
         selectedCategories: Array.from(categories),
@@ -151,10 +168,12 @@ const StoreProductsPage: React.FC = () => {
         selectedMaterials: materials,
         selectedColors: colors,
         selectedSizes: sizes,
+        selectedTags: tags,
+        priceRange: price,
       };
       sessionStorage.setItem(`store_filters_${subdomain}`, JSON.stringify(payload));
     },
-    [subdomain, selectedCategories, selectedSubcategories, selectedMaterials, selectedColors, selectedSizes]
+    [subdomain, selectedCategories, selectedSubcategories, selectedMaterials, selectedColors, selectedSizes, selectedTags, priceRange]
   );
 
   // Handle subcategory toggle (checkbox mode)
@@ -234,17 +253,6 @@ const StoreProductsPage: React.FC = () => {
               }
             }
 
-            const previewImagesByView = sp.designData?.previewImagesByView || sp.previewImagesByView || {};
-            const previewImageUrls = Object.values(previewImagesByView).filter((url): url is string =>
-              typeof url === 'string' && url.length > 0
-            );
-
-            const primaryImage =
-              previewImageUrls[0] ||
-              sp.galleryImages?.find((img: any) => img.isPrimary)?.url ||
-              (Array.isArray(sp.galleryImages) && sp.galleryImages[0]?.url) ||
-              undefined;
-
             const catalogProduct =
               sp.catalogProductId && typeof sp.catalogProductId === 'object'
                 ? sp.catalogProductId
@@ -252,6 +260,12 @@ const StoreProductsPage: React.FC = () => {
             const catalogProductId =
               catalogProduct?._id?.toString() ||
               (typeof sp.catalogProductId === 'string' ? sp.catalogProductId : '');
+
+            // Apply unified Group A (Designed) and Group B (Plain) logic
+            const spWithCatalog = { ...sp, catalogProduct };
+            const { allImages } = getProductImageGroups(spWithCatalog);
+
+            const primaryImage = allImages[0] || undefined;
 
             return {
               id,
@@ -263,14 +277,12 @@ const StoreProductsPage: React.FC = () => {
               compareAtPrice:
                 typeof sp.compareAtPrice === 'number' ? sp.compareAtPrice : undefined,
               mockupUrl: primaryImage,
-              mockupUrls:
-                previewImageUrls.length > 0
-                  ? previewImageUrls
-                  : Array.isArray(sp.galleryImages)
-                    ? sp.galleryImages.map((img: any) => img.url).filter(Boolean)
-                    : [],
+              mockupUrls: allImages,
               designs: sp.designData?.designs || {},
               designBoundaries: sp.designData?.designBoundaries,
+              // Match CategoryProducts naming for robust filtering logic
+              availableColors: sp.designData?.selectedColors || (sp.variantsSummary || []).map((v: any) => v.color).filter(Boolean),
+              availableSizes: sp.designData?.selectedSizes || (sp.variantsSummary || []).map((v: any) => v.size).filter(Boolean),
               variants: {
                 colors: sp.designData?.selectedColors || [],
                 sizes: sp.designData?.selectedSizes || [],
@@ -284,6 +296,7 @@ const StoreProductsPage: React.FC = () => {
                 ? catalogProduct.subcategoryIds.map((id: any) => id?.toString() || id)
                 : [],
               catalogProduct: catalogProduct,
+              tags: sp.tags || [],
               createdAt: sp.createdAt || new Date().toISOString(),
               updatedAt: sp.updatedAt || new Date().toISOString(),
             };
@@ -349,41 +362,36 @@ const StoreProductsPage: React.FC = () => {
     };
   }, [allProducts]);
 
-  // Extract available colors, sizes, and materials from products (for FilterSidebar)
+  // Extract available colors, sizes, materials and tags from products (for FilterSidebar)
   useEffect(() => {
     const colorsSet = new Set<string>();
     const sizesSet = new Set<string>();
     const materialsSet = new Set<string>();
+    const tagsSet = new Set<string>();
 
     allProducts.forEach((product: any) => {
       // Extract colors: prioritize availableColors (backend deduplicated), fallback to variants
       // Normalize to lowercase for consistent filtering
-      if (product.availableColors && Array.isArray(product.availableColors)) {
-        product.availableColors.forEach((color: string) => {
-          if (color && typeof color === 'string') {
-            const normalized = color.trim().toLowerCase();
-            if (normalized) colorsSet.add(normalized);
-          }
-        });
-      } else if (product.variants?.colors && Array.isArray(product.variants.colors)) {
-        // Fallback: extract from variants only if availableColors is missing
-        product.variants.colors.forEach((color: string) => {
-          if (color && typeof color === 'string') {
-            const normalized = color.trim().toLowerCase();
-            if (normalized) colorsSet.add(normalized);
-          }
-        });
-      }
+      const productColors = product.availableColors && Array.isArray(product.availableColors)
+        ? product.availableColors
+        : (product.variants?.colors || []);
+      productColors.forEach((color: string) => {
+        if (color && typeof color === 'string') {
+          const normalized = color.trim().toLowerCase();
+          if (normalized) colorsSet.add(normalized);
+        }
+      });
 
       // Extract sizes from variants - normalize to uppercase for consistency
-      if (product.variants?.sizes && Array.isArray(product.variants.sizes)) {
-        product.variants.sizes.forEach((size: string) => {
-          if (size && typeof size === 'string') {
-            const normalized = size.trim().toUpperCase();
-            if (normalized) sizesSet.add(normalized);
-          }
-        });
-      }
+      const productSizes = product.availableSizes && Array.isArray(product.availableSizes)
+        ? product.availableSizes
+        : (product.variants?.sizes || []);
+      productSizes.forEach((size: string) => {
+        if (size && typeof size === 'string') {
+          const normalized = size.trim().toUpperCase();
+          if (normalized) sizesSet.add(normalized);
+        }
+      });
 
       // Extract materials from catalogProduct attributes - normalize to lowercase
       const material = (product.catalogProduct as any)?.attributes?.material;
@@ -391,11 +399,22 @@ const StoreProductsPage: React.FC = () => {
         const normalized = material.trim().toLowerCase();
         if (normalized) materialsSet.add(normalized);
       }
+
+      // Extract tags
+      if (product.tags && Array.isArray(product.tags)) {
+        product.tags.forEach((tag: string) => {
+          if (tag && typeof tag === 'string') {
+            const normalized = tag.trim().toLowerCase();
+            if (normalized) tagsSet.add(normalized);
+          }
+        });
+      }
     });
 
     setAvailableColors(Array.from(colorsSet).sort());
     setAvailableSizes(Array.from(sizesSet).sort());
     setAvailableMaterials(Array.from(materialsSet).sort());
+    setAvailableTags(Array.from(tagsSet).sort());
   }, [allProducts]);
 
   // Toggle category selection
@@ -461,7 +480,6 @@ const StoreProductsPage: React.FC = () => {
     }
 
     // Category filter
-    // Category filter
     if (selectedCategories.size > 0) {
       filtered = filtered.filter((product) => {
         const productCategoryId = product.catalogProduct?.categoryId?.toString();
@@ -474,135 +492,44 @@ const StoreProductsPage: React.FC = () => {
     // We need to match the product's specific subcategory to the selected subcategory names
     if (selectedSubcategories.size > 0) {
       // Helper to normalize subcategory names for matching
-      // Maps CategorySidebar format (e.g., "Tote Bags", "Caps") to match product subcategories
       const normalizeSubcategoryName = (name: string): string => {
-        // Convert to singular and normalize formatting
-        const normalized = name
+        return name
           .toLowerCase()
           .trim()
           .replace(/\s+/g, ' ')
-          .replace(/-/g, ' ');
-
-        // Map common plural forms to singular (matching CATEGORIES config)
-        const pluralToSingular: Record<string, string> = {
-          'tote bags': 'tote bag',
-          'caps': 'cap',
-          't-shirts': 't-shirt',
-          'phone covers': 'phone cover',
-          'gaming pads': 'gaming pad',
-          'mugs': 'mug',
-          'cushions': 'cushion',
-          'cans': 'can',
-          'frames': 'frame',
-          'coasters': 'coaster',
-          'business cards': 'business card',
-          'id cards': 'id card',
-          'greeting cards': 'greeting card',
-          'boxes': 'box',
-          'tubes': 'tube',
-          'bottles': 'bottle',
-          'iphone cases': 'iphone',
-          'lap top cases': 'lap top',
-          'ipad cases': 'ipad',
-          'macbook cases': 'macbook',
-          'phone cases': 'phone',
-          'rings': 'ring',
-          'necklaces': 'necklace',
-          'earrings': 'earring',
-        };
-
-        return pluralToSingular[normalized] || normalized;
+          .replace(/-/g, ' ')
+          .replace(/s$/, ''); // Basic singularization
       };
 
-      // Helper to get the product's subcategory name from productTypeCode or other sources
-      const getProductSubcategoryName = (product: Product): string | null => {
-        const productCategoryId = product.catalogProduct?.categoryId?.toString();
-        if (!productCategoryId || !(productCategoryId in CATEGORIES)) {
-          return null;
-        }
-
-        const categorySubcategories = getSubcategories(productCategoryId as CategoryId);
-
-        // Method 1: Try to get subcategory name from productTypeCode
-        const productTypeCode = (product.catalogProduct as any)?.productTypeCode;
-        if (productTypeCode && typeof productTypeCode === 'string') {
-          // Convert "TOTE_BAG" -> "Tote Bag", "CAP" -> "Cap"
-          const subcatName = productTypeCode
-            .toLowerCase()
-            .replace(/_/g, ' ')
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-
-          // Check if the derived name matches any subcategory in the category
-          const normalizedDerived = normalizeSubcategoryName(subcatName);
-          const match = categorySubcategories.find(subcat =>
-            normalizeSubcategoryName(subcat) === normalizedDerived
-          );
-          if (match) {
-            return match; // Return the canonical name from CATEGORIES
-          }
-        }
-
-        // Method 2: Check if subcategoryId is actually a subcategory name
-        // Sometimes subcategoryId might be stored as the name itself
-        if (product.subcategoryId && typeof product.subcategoryId === 'string') {
-          const normalizedSubcatId = normalizeSubcategoryName(product.subcategoryId);
-          const match = categorySubcategories.find(subcat =>
-            normalizeSubcategoryName(subcat) === normalizedSubcatId
-          );
-          if (match) {
-            return match;
-          }
-        }
-
-        // Method 3: If product has subcategoryIds, try to match by checking product name
-        // against category subcategories
-        if (product.subcategoryIds && product.subcategoryIds.length > 0) {
-          const productNameLower = (product.name || '').toLowerCase();
-          // Find subcategory that matches product name keywords
-          const match = categorySubcategories.find(subcat => {
-            const normalizedSubcat = normalizeSubcategoryName(subcat);
-            const keywords = normalizedSubcat.split(' ');
-            return keywords.some(keyword =>
-              keyword.length > 2 && productNameLower.includes(keyword)
-            );
-          });
-          if (match) {
-            return match;
-          }
-        }
-
-        return null;
-      };
-
-      // Normalize selected subcategory names
       const normalizedSelected = new Set(
         Array.from(selectedSubcategories).map(normalizeSubcategoryName)
       );
 
       filtered = filtered.filter((product) => {
-        // Get the product's category
+        // Method 1: Check category subcategories map if we can find a name match
         const productCategoryId = product.catalogProduct?.categoryId?.toString();
-        if (!productCategoryId || !(productCategoryId in CATEGORIES)) {
-          return false;
+        if (productCategoryId && productCategoryId in CATEGORIES) {
+          const categorySubcategories = getSubcategories(productCategoryId as CategoryId);
+
+          // Try to match productTypeCode or subcategoryId to subcategory names
+          const productTypeCode = (product.catalogProduct as any)?.productTypeCode?.toLowerCase().replace(/_/g, ' ') || '';
+          const productSubcatId = String(product.subcategoryId || '').toLowerCase();
+
+          const matches = categorySubcategories.some(subcat => {
+            const normSubcat = normalizeSubcategoryName(subcat);
+            return normalizedSelected.has(normSubcat) &&
+              (normSubcat === normalizeSubcategoryName(productTypeCode) ||
+                normSubcat === normalizeSubcategoryName(productSubcatId));
+          });
+
+          if (matches) return true;
         }
 
-        // Get the product's actual subcategory name
-        const productSubcategoryName = getProductSubcategoryName(product);
-
-        if (!productSubcategoryName) {
-          // If we can't determine the subcategory, skip this product
-          return false;
-        }
-
-        // Normalize the product's subcategory name
-        const normalizedProductSubcat = normalizeSubcategoryName(productSubcategoryName);
-
-        // Check if the product's subcategory matches any selected subcategory
-        const matches = normalizedSelected.has(normalizedProductSubcat);
-
-        return matches;
+        // Method 2: Check product tags or name for subcategory keywords
+        const productNameLower = product.name.toLowerCase();
+        return Array.from(normalizedSelected).some(subcat =>
+          productNameLower.includes(subcat)
+        );
       });
     }
 
@@ -647,6 +574,25 @@ const StoreProductsPage: React.FC = () => {
       });
     }
 
+    // Tag filter
+    if (selectedTags.length > 0) {
+      const normalizedSelectedTags = selectedTags.map(t => t.trim().toLowerCase());
+      filtered = filtered.filter((product: any) => {
+        if (!product.tags || !Array.isArray(product.tags)) return false;
+        const normalizedProductTags = product.tags.map((t: string) =>
+          typeof t === 'string' ? t.trim().toLowerCase() : String(t).trim().toLowerCase()
+        );
+        return normalizedProductTags.some((tag: string) => normalizedSelectedTags.includes(tag));
+      });
+    }
+
+    // Price range filter
+    if (priceRange[0] > 0 || priceRange[1] < 5000) { // Assuming 5000 is max, adjust as needed
+      filtered = filtered.filter((product: any) => {
+        return product.price >= priceRange[0] && product.price <= priceRange[1];
+      });
+    }
+
     // Sort products
     filtered.sort((a, b) => {
       switch (sortOption) {
@@ -668,7 +614,18 @@ const StoreProductsPage: React.FC = () => {
     });
 
     return filtered;
-  }, [allProducts, searchQuery, selectedCategories, selectedSubcategories, selectedColors, selectedSizes, selectedMaterials, sortOption]);
+  }, [
+    allProducts,
+    searchQuery,
+    selectedCategories,
+    selectedSubcategories,
+    selectedColors,
+    selectedSizes,
+    selectedMaterials,
+    selectedTags,
+    priceRange,
+    sortOption,
+  ]);
 
   const handleProductClick = (product: Product) => {
     if (!store) return;
@@ -733,6 +690,8 @@ const StoreProductsPage: React.FC = () => {
     setSelectedColors([]);
     setSelectedSizes([]);
     setSelectedMaterials([]);
+    setSelectedTags([]);
+    setPriceRange([0, 5000]);
     setSortOption('newest');
     // Clear persisted filters from sessionStorage
     if (subdomain) {
@@ -741,10 +700,23 @@ const StoreProductsPage: React.FC = () => {
   };
 
   const hasActiveFilters =
-    searchQuery.trim() !== '' || selectedCategories.size > 0 || selectedSubcategories.size > 0 ||
-    selectedColors.length > 0 || selectedSizes.length > 0 || selectedMaterials.length > 0;
+    searchQuery.trim() !== '' ||
+    selectedCategories.size > 0 ||
+    selectedSubcategories.size > 0 ||
+    selectedColors.length > 0 ||
+    selectedSizes.length > 0 ||
+    selectedMaterials.length > 0 ||
+    selectedTags.length > 0 ||
+    priceRange[1] < 5000;
 
-  const activeFilterCount = selectedCategories.size + selectedSubcategories.size + selectedColors.length + selectedSizes.length + selectedMaterials.length;
+  const activeFilterCount =
+    selectedCategories.size +
+    selectedSubcategories.size +
+    selectedColors.length +
+    selectedSizes.length +
+    selectedMaterials.length +
+    selectedTags.length +
+    (priceRange[1] < 5000 ? 1 : 0);
 
   if (!store && !loading) {
     return (
@@ -874,17 +846,23 @@ const StoreProductsPage: React.FC = () => {
               availableMaterials={availableMaterials}
               availableColors={availableColors}
               availableSizes={availableSizes}
+              availableTags={availableTags}
               selectedMaterials={selectedMaterials}
               selectedColors={selectedColors}
               selectedSizes={selectedSizes}
-              onFiltersChange={({ materials, colors, sizes }) => {
+              selectedTags={selectedTags}
+              onFiltersChange={({ materials, colors, sizes, tags, priceRange }) => {
                 setSelectedMaterials(materials);
                 setSelectedColors(colors);
                 setSelectedSizes(sizes);
+                if (tags) setSelectedTags(tags);
+                if (priceRange) setPriceRange(priceRange);
                 persistFilters({
                   selectedMaterials: materials,
                   selectedColors: colors,
                   selectedSizes: sizes,
+                  selectedTags: tags,
+                  priceRange: priceRange,
                 });
               }}
             />
@@ -947,17 +925,23 @@ const StoreProductsPage: React.FC = () => {
                           availableMaterials={availableMaterials}
                           availableColors={availableColors}
                           availableSizes={availableSizes}
+                          availableTags={availableTags}
                           selectedMaterials={selectedMaterials}
                           selectedColors={selectedColors}
                           selectedSizes={selectedSizes}
-                          onFiltersChange={({ materials, colors, sizes }) => {
+                          selectedTags={selectedTags}
+                          onFiltersChange={({ materials, colors, sizes, tags, priceRange }) => {
                             setSelectedMaterials(materials);
                             setSelectedColors(colors);
                             setSelectedSizes(sizes);
+                            if (tags) setSelectedTags(tags);
+                            if (priceRange) setPriceRange(priceRange);
                             persistFilters({
                               selectedMaterials: materials,
                               selectedColors: colors,
                               selectedSizes: sizes,
+                              selectedTags: tags,
+                              priceRange: priceRange,
                             });
                           }}
                         />

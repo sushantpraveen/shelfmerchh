@@ -115,13 +115,17 @@ interface FilterSidebarProps {
   availableMaterials: string[];
   availableColors: string[] | Array<{ value: string; colorHex?: string }>;
   availableSizes: string[];
+  availableTags?: string[];
   selectedMaterials: string[];
   selectedColors: string[];
   selectedSizes: string[];
+  selectedTags?: string[];
   onFiltersChange: (filters: {
     materials: string[];
     colors: string[];
     sizes: string[];
+    tags?: string[];
+    priceRange?: [number, number];
   }) => void;
 }
 
@@ -129,27 +133,29 @@ export const FilterSidebar = ({
   availableMaterials,
   availableColors,
   availableSizes,
+  availableTags = [],
   selectedMaterials,
   selectedColors,
   selectedSizes,
+  selectedTags = [],
   onFiltersChange,
 }: FilterSidebarProps) => {
-  // Internal-only filters (types, print methods, delivery, price) remain local,
-  // but dynamic material/colors/sizes are controlled via props.
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [selectedPrintMethods, setSelectedPrintMethods] = useState<string[]>([]);
-  const [selectedDelivery, setSelectedDelivery] = useState<string[]>([]);
-  const [priceRange, setPriceRange] = useState([0, 5000]);
+  // priceRange remains local for slider but informs parent
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]);
 
   const updateFilters = (opts: {
     materials?: string[];
     colors?: string[];
     sizes?: string[];
+    tags?: string[];
+    priceRange?: [number, number];
   }) => {
     onFiltersChange({
       materials: opts.materials !== undefined ? opts.materials : selectedMaterials,
       colors: opts.colors !== undefined ? opts.colors : selectedColors,
       sizes: opts.sizes !== undefined ? opts.sizes : selectedSizes,
+      tags: opts.tags !== undefined ? opts.tags : selectedTags,
+      priceRange: opts.priceRange !== undefined ? opts.priceRange : priceRange,
     });
   };
 
@@ -174,20 +180,35 @@ export const FilterSidebar = ({
     updateFilters({ sizes: next });
   };
 
+  const toggleTag = (item: string) => {
+    const next = selectedTags.includes(item)
+      ? selectedTags.filter((i) => i !== item)
+      : [...selectedTags, item];
+    updateFilters({ tags: next });
+  };
+
+  const handlePriceChange = (value: number) => {
+    const nextRange: [number, number] = [0, value];
+    setPriceRange(nextRange);
+    updateFilters({ priceRange: nextRange });
+  };
+
   const activeFiltersCount =
-    selectedTypes.length +
     selectedMaterials.length +
-    selectedPrintMethods.length +
     selectedColors.length +
     selectedSizes.length +
-    selectedDelivery.length;
+    selectedTags.length +
+    (priceRange[1] < 5000 ? 1 : 0);
 
   const clearAllFilters = () => {
-    setSelectedTypes([]);
-    setSelectedPrintMethods([]);
-    setSelectedDelivery([]);
     setPriceRange([0, 5000]);
-    updateFilters({ materials: [], colors: [], sizes: [] });
+    onFiltersChange({
+      materials: [],
+      colors: [],
+      sizes: [],
+      tags: [],
+      priceRange: [0, 5000],
+    });
   };
 
   return (
@@ -210,15 +231,6 @@ export const FilterSidebar = ({
         {/* Active filters */}
         {activeFiltersCount > 0 && (
           <div className="py-3 flex flex-wrap gap-2">
-            {selectedTypes.map((type) => (
-              <FilterChip
-                key={`type-${type}`}
-                label={type}
-                onRemove={() =>
-                  setSelectedTypes(selectedTypes.filter((value) => value !== type))
-                }
-              />
-            ))}
             {selectedMaterials.map((material) => (
               <FilterChip
                 key={`material-${material}`}
@@ -226,6 +238,16 @@ export const FilterSidebar = ({
                 onRemove={() => {
                   const next = selectedMaterials.filter((value) => value !== material);
                   updateFilters({ materials: next });
+                }}
+              />
+            ))}
+            {selectedTags.map((tag) => (
+              <FilterChip
+                key={`tag-${tag}`}
+                label={tag}
+                onRemove={() => {
+                  const next = selectedTags.filter((value) => value !== tag);
+                  updateFilters({ tags: next });
                 }}
               />
             ))}
@@ -252,62 +274,33 @@ export const FilterSidebar = ({
           </div>
         )}
 
-        {/* Filter sections
-        <div className="max-h-[calc(100vh-220px)] overflow-y-auto pr-2">
-          <FilterSection title="Product Type">
-            {productTypes.map((type) => (
+        {availableTags.length > 0 && (
+          <FilterSection title="Tags">
+            {availableTags.map((tag) => (
               <FilterCheckbox
-                key={type.name}
-                name={type.name}
-                checked={selectedTypes.includes(type.name)}
-                onChange={() => toggleFilter(type.name, selectedTypes, setSelectedTypes)}
-              />
-            ))}
-          </FilterSection> */}
-
-        {/* Material filter - only show if backend has materials for this subcategory */}
-        {availableMaterials.length > 0 && (
-          <FilterSection title="Material">
-            {availableMaterials.map((materialName) => (
-              <FilterCheckbox
-                key={materialName}
-                name={materialName}
-                checked={selectedMaterials.includes(materialName)}
-                onChange={() => toggleMaterial(materialName)}
+                key={tag}
+                name={tag}
+                checked={selectedTags.includes(tag)}
+                onChange={() => toggleTag(tag)}
               />
             ))}
           </FilterSection>
         )}
 
-        {/* <FilterSection title="Print Method">
-            {printMethods.map((method) => (
-              <FilterCheckbox
-                key={method.name}
-                name={method.name}
-                checked={selectedPrintMethods.includes(method.name)}
-                onChange={() =>
-                  toggleFilter(method.name, selectedPrintMethods, setSelectedPrintMethods)
-                }
-              />
-            ))}
-          </FilterSection> */}
+        <FilterSection title="Price Range">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm font-medium">
+              <span className="text-foreground">₹0</span>
+              <span className="text-foreground">₹{priceRange[1]}</span>
+            </div>
 
-        {/* <FilterSection title="Price Range">
-            <div className="space-y-3">
-              
-              <div className="flex items-center justify-between text-sm font-medium">
-                <span className="text-foreground">₹0</span>
-                <span className="text-foreground">₹{priceRange[1]}</span>
-              </div>
-
-              
-              <input
-                type="range"
-                min={0}
-                max={5000}
-                value={priceRange[1]}
-                onChange={(e) => setPriceRange([0, parseInt(e.target.value)])}
-                className="w-full h-2 cursor-pointer bg-green-500 rounded-full appearance-none
+            <input
+              type="range"
+              min={0}
+              max={5000}
+              value={priceRange[1]}
+              onChange={(e) => handlePriceChange(parseInt(e.target.value))}
+              className="w-full h-2 cursor-pointer bg-green-500 rounded-full appearance-none
                            [&::-webkit-slider-thumb]:appearance-none
                            [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
                            [&::-webkit-slider-thumb]:rounded-full
@@ -318,9 +311,9 @@ export const FilterSidebar = ({
                            [&::-moz-range-thumb]:rounded-full
                            [&::-moz-range-thumb]:background-transparent
                            [&::-moz-range-thumb]:background-color:transparent"
-              />
-            </div>
-          </FilterSection> */}
+            />
+          </div>
+        </FilterSection>
 
         {/* Colors filter - only show if backend has colors for this subcategory */}
         {availableColors.length > 0 && (

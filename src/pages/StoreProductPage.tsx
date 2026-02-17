@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { getTenantSlugFromLocation, buildStorePath } from '@/utils/tenantUtils';
+import { getProductImageGroups } from '@/utils/productImageUtils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -356,28 +357,10 @@ const StoreProductPage = () => {
             compareAtPrice:
               typeof sp.compareAtPrice === 'number' ? sp.compareAtPrice : undefined,
             mockupUrl: primaryImage,
-            mockupUrls: (() => {
-              const previewImagesByView = sp.designData?.previewImagesByView || sp.previewImagesByView || {};
-              const previewImageUrls = Object.values(previewImagesByView).filter((url): url is string =>
-                typeof url === 'string' && url.length > 0
-              );
-
-              if (previewImageUrls.length > 0) {
-                return previewImageUrls;
-              }
-
-              if (Array.isArray(sp.previewImagesUrl)) {
-                return sp.previewImagesUrl.map((img: any) => img.url || img).filter(Boolean);
-              }
-
-              if (Array.isArray(sp.galleryImages)) {
-                return sp.galleryImages.map((img: any) => img.url || img).filter(Boolean);
-              }
-
-              return [];
-            })(),
+            mockupUrls: [], // Will be computed dynamically by galleryImages useMemo
             designs: sp.designData?.designs || {},
             designBoundaries: sp.designData?.designBoundaries,
+            designData: sp.designData,
             categoryId: sp.categoryId || sp.catalogProduct?.categoryId || (typeof sp.catalogProductId === 'object' ? (sp.catalogProductId as any).categoryId : undefined),
             subcategoryIds: sp.subcategoryIds || sp.catalogProduct?.subcategoryIds || (typeof sp.catalogProductId === 'object' ? (sp.catalogProductId as any).subcategoryIds : []),
             catalogProduct: sp.catalogProduct || (typeof sp.catalogProductId === 'object' ? sp.catalogProductId : undefined),
@@ -423,6 +406,7 @@ const StoreProductPage = () => {
                     subcategoryIds: catData.catalogue?.subcategoryIds || catData.subcategoryIds,
                     description: catData.catalogue?.description || catData.description,
                     name: catData.catalogue?.name || catData.name,
+                    sampleMockups: catData.sampleMockups || [],
                   };
 
                   return {
@@ -574,12 +558,9 @@ const StoreProductPage = () => {
 
   const galleryImages = useMemo(() => {
     if (!product) return [];
-    return product.mockupUrls && product.mockupUrls.length > 0
-      ? product.mockupUrls
-      : product.mockupUrl
-        ? [product.mockupUrl]
-        : [];
-  }, [product?.mockupUrls, product?.mockupUrl]);
+    const { allImages } = getProductImageGroups(product, selectedColor);
+    return allImages;
+  }, [product, selectedColor]);
 
   useEffect(() => {
     if (galleryImages.length > 0 && activeImageIndex >= 0 && activeImageIndex < galleryImages.length) {

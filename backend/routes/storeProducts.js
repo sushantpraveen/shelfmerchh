@@ -79,7 +79,7 @@ router.post('/', protect, authorize('merchant', 'superadmin'), async (req, res) 
     // This avoids overwriting other listings of the same catalog product.
     const { id, _id } = req.body;
     const spId = id || _id;
-    
+
     let storeProduct;
     if (spId && mongoose.Types.ObjectId.isValid(spId)) {
       storeProduct = await StoreProduct.findOneAndUpdate(
