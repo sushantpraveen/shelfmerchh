@@ -39,13 +39,13 @@ router.get(
     try {
       // 1. Determine final redirect target
       let clientUrl = getClientUrl(req);
-      
+
       // If we passed it through state, we could recover it here
       if (req.query.state) {
         try {
           const state = JSON.parse(req.query.state);
           if (state.clientUrl) clientUrl = state.clientUrl;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // Generate tokens
@@ -951,7 +951,7 @@ router.post('/otp/send', async (req, res) => {
         console.log(`[OTP-SEND] Created new user: ${user._id}`);
       } catch (err) {
         console.error('[OTP-SEND] Error creating user:', err);
-        return res.status(500).json({ success: false, message: 'Error creating user record' });
+        return res.status(500).json({ success: false, message: 'Error creating user record: ' + err.message });
       }
     }
 
@@ -1299,7 +1299,7 @@ router.post('/signup/otp/complete', async (req, res) => {
     // Build query to check for existing users
     const orConditions = [];
     if (email) orConditions.push({ email: email.toLowerCase() });
-    if (phone) orConditions.push({ phone });
+    if (phone) orConditions.push({ phoneNumber: phone });
 
     if (orConditions.length > 0) {
       const existingUser = await User.findOne({ $or: orConditions });
@@ -1318,7 +1318,7 @@ router.post('/signup/otp/complete', async (req, res) => {
       userData.isEmailVerified = true;
     }
     if (phone) {
-      userData.phone = phone;
+      userData.phoneNumber = phone;
       userData.isPhoneVerified = true;
     }
     if (password) {
@@ -1471,7 +1471,7 @@ router.post('/verify-phone-later', protect, async (req, res) => {
     }
 
     // Check if phone is already taken by another user
-    const existingUser = await User.findOne({ phone, _id: { $ne: req.user.id } });
+    const existingUser = await User.findOne({ phoneNumber: phone, _id: { $ne: req.user.id } });
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'Phone number already in use' });
     }
@@ -1488,7 +1488,7 @@ router.post('/verify-phone-later', protect, async (req, res) => {
 
     // Update user with phone and OTP
     const user = await User.findById(req.user.id);
-    user.phone = phone;
+    user.phoneNumber = phone;
     user.phoneVerificationToken = result.otp;
     user.phoneVerificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await user.save({ validateBeforeSave: false });

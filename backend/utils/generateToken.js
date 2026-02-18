@@ -39,11 +39,11 @@ const sendTokenResponse = async (user, statusCode, res) => {
     console.log('Generating tokens for user:', user._id);
     console.log('User ID type:', typeof user._id);
     console.log('User ID value:', user._id);
-    
+
     // Ensure user._id is converted to string for JWT
     const userId = user._id.toString();
     console.log('User ID as string:', userId);
-    
+
     // Create token
     const token = generateToken(userId);
     console.log('Access token generated');
@@ -56,14 +56,14 @@ const sendTokenResponse = async (user, statusCode, res) => {
     await user.save({ validateBeforeSave: false });
     console.log('User saved successfully');
 
-  const options = {
-    expires: new Date(
-      Date.now() + (process.env.JWT_COOKIE_EXPIRE || 1) * 24 * 60 * 60 * 1000
-    ),
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
-  };
+    const options = {
+      expires: new Date(
+        Date.now() + (process.env.JWT_COOKIE_EXPIRE || 1) * 24 * 60 * 60 * 1000
+      ),
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    };
 
     res
       .status(statusCode)
@@ -76,9 +76,14 @@ const sendTokenResponse = async (user, statusCode, res) => {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
+          phoneNumber: user.phoneNumber,
+          phone: user.phoneNumber, // For compatibility
           role: user.role,
           isEmailVerified: user.isEmailVerified,
-          createdAt: user.createdAt
+          isPhoneVerified: user.isPhoneVerified,
+          createdAt: user.createdAt,
+          lastLogin: user.lastLogin,
+          upiId: user.upiId
         }
       });
   } catch (error) {

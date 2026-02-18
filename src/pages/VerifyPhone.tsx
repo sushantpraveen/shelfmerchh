@@ -8,8 +8,8 @@ import logo from '@/assets/logo.webp';
 
 const VerifyPhone: React.FC = () => {
     const navigate = useNavigate();
-    const { refreshUser } = useAuth();
-    const [phone, setPhone] = useState('');
+    const { refreshUser, user } = useAuth();
+    const [phone, setPhone] = useState(user?.phoneNumber || '');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
     const [serverOtp, setServerOtp] = useState('');

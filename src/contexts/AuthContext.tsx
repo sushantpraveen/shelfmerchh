@@ -50,7 +50,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser({
               id: response.user.id,
               email: response.user.email,
-              phone: response.user.phone,
+              phone: response.user.phoneNumber || response.user.phone, // Deprecated: Use phoneNumber
+              phoneNumber: response.user.phoneNumber,
               name: response.user.name,
               role: response.user.role as UserRole,
               isEmailVerified: response.user.isEmailVerified || false,
@@ -84,7 +85,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: response.user.id,
           email: response.user.email,
-          phone: response.user.phone,
+          phone: response.user.phoneNumber || response.user.phone, // Deprecated
+          phoneNumber: response.user.phoneNumber,
           name: response.user.name,
           role: response.user.role as UserRole,
           isEmailVerified: response.user.isEmailVerified || false,
@@ -130,7 +132,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: response.user.id,
           email: response.user.email,
-          phone: response.user.phoneNumber, // Map phoneNumber to phone for frontend compatibility if needed, or update interface
+          phone: response.user.phoneNumber || response.user.phone, // Deprecated
+          phoneNumber: response.user.phoneNumber,
           name: response.user.name,
           role: response.user.role as UserRole,
           isEmailVerified: response.user.isEmailVerified || false,
@@ -182,7 +185,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: response.user.id,
           email: response.user.email,
-          phone: response.user.phone,
+          phone: response.user.phoneNumber || response.user.phone, // Deprecated
+          phoneNumber: response.user.phoneNumber,
           name: response.user.name,
           role: response.user.role as UserRole,
           isEmailVerified: response.user.isEmailVerified || false,

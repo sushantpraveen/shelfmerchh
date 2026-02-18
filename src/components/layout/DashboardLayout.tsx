@@ -314,31 +314,9 @@ interface DashboardLayoutProps {
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const { user, logout, isAdmin } = useAuth();
-  const { selectedStore, selectStoreById } = useStore();
+  const { selectedStore, selectStoreById, stores, loading: storesLoading } = useStore();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  // Fetch stores directly via storeApi — exactly the same call as Stores.tsx
-  // This guarantees storeName and subdomain come from the identical API response
-  const [stores, setStores] = useState<StoreType[]>([]);
-  const [storesLoading, setStoresLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchStores = async () => {
-      try {
-        setStoresLoading(true);
-        const response = await storeApi.listMyStores();
-        if (response.success) {
-          setStores(response.data || []);
-        }
-      } catch (err: any) {
-        console.error('Error fetching stores in DashboardLayout:', err);
-      } finally {
-        setStoresLoading(false);
-      }
-    };
-    fetchStores();
-  }, []);
 
   // Close sidebar when route changes on mobile
   useEffect(() => {
@@ -358,18 +336,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
-  // Find the active store from the directly-fetched list using selectedStore's id
-  // Falls back to first store so something always displays
-  const activeStore: StoreType | null =
-    stores.find(
-      (s) =>
-        s.id === selectedStore?.id ||
-        s._id === selectedStore?._id ||
-        s.id === selectedStore?._id ||
-        s._id === selectedStore?.id
-    ) ??
-    stores[0] ??
-    null;
+  // Use selectedStore from context directly
+  // If we have stores but no selectedStore, fallback to the first one (though context handles this too)
+  const activeStore = selectedStore || (stores.length > 0 ? stores[0] : null);
 
   return (
     <div className="min-h-screen bg-background">
@@ -416,11 +385,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                   <div className="flex items-center gap-2">
                     <Store className="h-4 w-4" />
                     <div className="text-left">
-                      {/* activeStore.storeName — from same API call as Stores.tsx */}
                       <p className="font-medium text-sm truncate max-w-[120px]">
                         {activeStore?.storeName || 'Select Store'}
                       </p>
-                      {/* activeStore.subdomain — from same API call as Stores.tsx */}
                       {activeStore && (
                         <p className="text-xs text-muted-foreground truncate max-w-[120px]">
                           {activeStore.subdomain}.shelfmerch.com
@@ -452,9 +419,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                       className="flex items-center justify-between cursor-pointer"
                     >
                       <div className="flex flex-col">
-                        {/* store.storeName — identical field used in Stores.tsx table */}
                         <span className="font-medium">{store.storeName}</span>
-                        {/* store.subdomain — identical field used in Stores.tsx table */}
                         <span className="text-xs text-muted-foreground">
                           {store.subdomain}.shelfmerch.com
                         </span>

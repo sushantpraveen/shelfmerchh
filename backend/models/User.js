@@ -10,10 +10,9 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    unique: true,
-    sparse: true,
     lowercase: true,
     trim: true,
+    index: { unique: true, sparse: true },
     match: [
       /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
       'Please provide a valid email'
@@ -23,15 +22,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: function () {
       // Password is required only if user is not using OAuth and not an OTP-only user
-      return !this.googleId && !this.phone && !this.isOtpUser;
+      return !this.googleId && !this.phoneNumber && !this.isOtpUser;
     },
     minlength: [6, 'Password must be at least 6 characters'],
     select: false // Don't return password by default
   },
   googleId: {
     type: String,
-    unique: true,
-    sparse: true // Allow multiple null values
+    index: { unique: true, sparse: true } // Allow multiple null values
   },
   avatar: {
     type: String
@@ -91,8 +89,7 @@ const userSchema = new mongoose.Schema({
   },
   phoneNumber: {
     type: String,
-    unique: true,
-    sparse: true,
+    index: { unique: true, sparse: true },
     trim: true
   },
   lastLogin: {
