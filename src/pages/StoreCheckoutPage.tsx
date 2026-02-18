@@ -11,7 +11,7 @@ import { getTheme } from '@/lib/themes';
 import { storeApi, checkoutApi, shippingApi } from '@/lib/api';
 import { useStoreAuth } from '@/contexts/StoreAuthContext';
 import { estimateCartWeight } from '@/lib/delhivery';
-import { getTenantSlugFromLocation } from '@/utils/tenantUtils';
+import { getTenantSlugFromLocation, buildStorePath } from '@/utils/tenantUtils';
 import { useCart } from '@/contexts/CartContext';
 
 import {
@@ -23,6 +23,7 @@ import {
   Loader2,
   Check,
   ChevronsUpDown,
+  AlertCircle
 } from 'lucide-react';
 import {
   Command,
@@ -101,7 +102,7 @@ const StoreCheckoutPage: React.FC = () => {
 
 
 
-  const { isAuthenticated } = useStoreAuth();
+  const { isAuthenticated, customer } = useStoreAuth();
 
   useEffect(() => {
     if (store && !isAuthenticated) {
@@ -111,6 +112,26 @@ const StoreCheckoutPage: React.FC = () => {
       });
     }
   }, [isAuthenticated, store, navigate, locationState]);
+
+  // Auto-fill default address
+  useEffect(() => {
+    if (customer && customer.addresses && customer.addresses.length > 0) {
+      const defaultAddr = customer.addresses.find(a => a.isDefault) || customer.addresses[0];
+      if (defaultAddr && (!shippingInfo.fullName || shippingInfo.fullName === '')) {
+        setShippingInfo({
+          fullName: defaultAddr.fullName || '',
+          email: customer.email || '',
+          phone: defaultAddr.phone || customer.phoneNumber || '',
+          address1: defaultAddr.address1 || '',
+          address2: defaultAddr.address2 || '',
+          city: defaultAddr.city || '',
+          state: defaultAddr.state || '',
+          zipCode: defaultAddr.zipCode || '',
+          country: defaultAddr.country || 'India',
+        });
+      }
+    }
+  }, [customer, isAuthenticated]);
 
   const theme = store ? getTheme(store.theme) : getTheme('modern');
 
@@ -352,6 +373,18 @@ const StoreCheckoutPage: React.FC = () => {
       return;
     }
 
+    // MANDATORY: Check for verification before first checkout
+    if (customer && (!customer.isEmailVerified || !customer.isPhoneVerified)) {
+      toast.error(`Please verify your ${!customer.isEmailVerified ? 'email' : 'phone number'} before placing your order.`, {
+        description: "You can complete this in your Profile section.",
+        action: {
+          label: "Go to Profile",
+          onClick: () => navigate(buildStorePath('/profile', subdomain || ''))
+        }
+      });
+      return;
+    }
+
     const ok = await loadRazorpayScript();
     if (!ok) {
       toast.error('Failed to load payment gateway. Please try again.');
@@ -566,6 +599,63 @@ const StoreCheckoutPage: React.FC = () => {
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
+              {/* Verification Message */}
+              {customer && (!customer.isEmailVerified || !customer.isPhoneVerified) && (
+                <div className="sm:col-span-2 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 mb-2">
+                  <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-amber-900">Verification Required</p>
+                    <p className="text-xs text-amber-700">
+                      Please verify your {!customer.isEmailVerified ? 'email' : 'phone number'} to proceed with the checkout.
+                      <Link to={buildStorePath('/profile', subdomain || '')} className="ml-1 font-bold underline">Go to Profile</Link>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Saved Address Selection */}
+              {customer && customer.addresses && customer.addresses.length > 0 && (
+                <div className="sm:col-span-2 mb-2">
+                  <Label className="mb-2 block">Select from saved addresses</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {customer.addresses.map((addr) => (
+                      <Button
+                        key={addr._id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "rounded-xl h-auto py-2 px-3 flex flex-col items-start text-left bg-background border-2",
+                          shippingInfo.zipCode === addr.zipCode && shippingInfo.address1 === addr.address1
+                            ? "border-green-600 bg-green-50/30"
+                            : "border-border hover:border-green-200 hover:bg-green-50/10"
+                        )}
+                        onClick={() => {
+                          setShippingInfo({
+                            fullName: addr.fullName,
+                            email: customer.email || '',
+                            phone: addr.phone,
+                            address1: addr.address1,
+                            address2: addr.address2 || '',
+                            city: addr.city,
+                            state: addr.state,
+                            zipCode: addr.zipCode,
+                            country: addr.country
+                          });
+                        }}
+                      >
+                        <span className="text-xs font-bold">{addr.label || 'Address'}</span>
+                        <span className="text-[10px] text-muted-foreground line-clamp-1">{addr.address1}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="sm:col-span-2 text-muted-foreground text-xs pb-2">
+                All fields marked with * are required.
+              </div>
+
               <div className="sm:col-span-2">
                 <Label htmlFor="fullName">Full name *</Label>
                 <Input

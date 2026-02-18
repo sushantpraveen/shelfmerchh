@@ -443,6 +443,53 @@ export const checkoutApi = {
   },
 };
 
+// Store Customer Orders API (for storefront)
+export const storeCustomerOrdersApi = {
+  // List orders for the authenticated customer
+  list: async (subdomain: string) => {
+    const storeTokenKey = `store_token_${subdomain}`;
+    const token = localStorage.getItem(storeTokenKey);
+
+    const response = await fetch(`${API_BASE_URL}/store-customer/orders`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(errorData.message || 'Failed to fetch orders', response.status);
+    }
+
+    return await response.json();
+  },
+
+  // Get a single order by ID
+  getById: async (subdomain: string, orderId: string) => {
+    const storeTokenKey = `store_token_${subdomain}`;
+    const token = localStorage.getItem(storeTokenKey);
+
+    const response = await fetch(`${API_BASE_URL}/store-customer/orders/${orderId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(errorData.message || 'Failed to fetch order details', response.status);
+    }
+
+    return await response.json();
+  },
+};
+
 // Shipping API
 export const shippingApi = {
   getQuote: async (destPincode: string, weightGrams: number) => {

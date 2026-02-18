@@ -322,11 +322,6 @@ const StoreProductsPage: React.FC = () => {
     loadStoreData();
   }, [subdomain, loadStoreData]);
 
-  useEffect(() => {
-    if (subdomain) {
-      checkAuth(subdomain);
-    }
-  }, [subdomain, checkAuth]);
 
   // Get available categories and subcategories from products
   const { availableCategories, availableSubcategoriesByCategory } = useMemo(() => {

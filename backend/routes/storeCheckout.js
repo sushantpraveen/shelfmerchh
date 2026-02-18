@@ -13,7 +13,7 @@ const CatalogProductVariant = require('../models/CatalogProductVariant');
 const FulfillmentInvoice = require('../models/FulfillmentInvoice');
 const User = require('../models/User');
 const walletService = require('../services/walletService');
-const { sendMerchantOrderNotification } = require('../utils/mailer');
+const { sendMerchantOrderNotification, sendCustomerOrderConfirmation } = require('../utils/mailer');
 const { generateOrderInvoicePDF } = require('../utils/pdfGenerator');
 
 // Initialize Razorpay instance
@@ -262,6 +262,40 @@ const generateFulfillmentInvoice = async (order) => {
   }
 };
 
+// Helper to send order notifications to both merchant and customer
+const sendOrderNotifications = async (order, store) => {
+  try {
+    const merchantId = store.merchant;
+    const merchant = await User.findById(merchantId).select('email');
+
+    // Generate PDF invoice
+    let attachments = [];
+    try {
+      const pdfBuffer = await generateOrderInvoicePDF(order, store);
+      attachments.push({
+        filename: `invoice_${order._id.toString().toUpperCase()}.pdf`,
+        content: pdfBuffer
+      });
+      console.log(`[Checkout] PDF invoice generated for order ${order._id}`);
+    } catch (pdfError) {
+      console.error('[Checkout] Failed to generate PDF invoice:', pdfError);
+      // Continue without PDF if it fails
+    }
+
+    // 1. Send notification to merchant
+    if (merchant && merchant.email) {
+      await sendMerchantOrderNotification(merchant.email, order, store.storeName || store.name || 'Your Store', attachments);
+    }
+
+    // 2. Send confirmation to customer
+    if (order.customerEmail) {
+      await sendCustomerOrderConfirmation(order.customerEmail, order, store, attachments);
+    }
+  } catch (err) {
+    console.error('[Checkout] Error in sendOrderNotifications:', err);
+  }
+};
+
 // POST /api/store-checkout/:subdomain
 // Authenticated endpoint used by storefront checkout to create an order
 router.post('/:subdomain', verifyStoreToken, async (req, res) => {
@@ -349,31 +383,11 @@ router.post('/:subdomain', verifyStoreToken, async (req, res) => {
     // Trigger fulfillment invoice generation for the merchant
     await generateFulfillmentInvoice(order);
 
-    // Send order notification to merchant
-    try {
-      const merchant = await User.findById(merchantId).select('email');
-      if (merchant && merchant.email) {
-        // Generate PDF invoice
-        let attachments = [];
-        try {
-          const pdfBuffer = await generateOrderInvoicePDF(order, store);
-          attachments.push({
-            filename: `invoice_${order._id.toString().toUpperCase()}.pdf`,
-            content: pdfBuffer
-          });
-          console.log(`[Checkout] PDF invoice generated for order ${order._id}`);
-        } catch (pdfError) {
-          console.error('[Checkout] Failed to generate PDF invoice:', pdfError);
-          // Continue without PDF if it fails
-        }
+    // Send notifications (Merchant + Customer)
+    await sendOrderNotifications(order, store);
 
-        await sendMerchantOrderNotification(merchant.email, order, store.name, attachments);
-      }
-    } catch (emailError) {
-      console.error('[Checkout] Failed to send merchant notification:', emailError);
-    }
-
-    return res.status(201).json({ success: true, data: order });
+    const populatedOrder = await StoreOrder.findById(order._id).populate('items.storeProductId').lean();
+    return res.status(201).json({ success: true, data: populatedOrder });
   } catch (error) {
     console.error('store-checkout error:', error);
     return res.status(500).json({ success: false, message: 'Failed to place order' });
@@ -590,31 +604,11 @@ router.post('/:subdomain/razorpay/verify-payment', verifyStoreToken, async (req,
     // Trigger fulfillment invoice generation for the merchant
     await generateFulfillmentInvoice(order);
 
-    // Send order notification to merchant
-    try {
-      const merchant = await User.findById(merchantId).select('email');
-      if (merchant && merchant.email) {
-        // Generate PDF invoice
-        let attachments = [];
-        try {
-          const pdfBuffer = await generateOrderInvoicePDF(order, store);
-          attachments.push({
-            filename: `invoice_${order._id.toString().toUpperCase()}.pdf`,
-            content: pdfBuffer
-          });
-          console.log(`[Checkout] PDF invoice generated for order ${order._id}`);
-        } catch (pdfError) {
-          console.error('[Checkout] Failed to generate PDF invoice:', pdfError);
-          // Continue without PDF if it fails
-        }
+    // Send notifications (Merchant + Customer)
+    await sendOrderNotifications(order, store);
 
-        await sendMerchantOrderNotification(merchant.email, order, store.name, attachments);
-      }
-    } catch (emailError) {
-      console.error('[Checkout] Failed to send merchant notification:', emailError);
-    }
-
-    return res.status(201).json({ success: true, data: order });
+    const populatedOrder = await StoreOrder.findById(order._id).populate('items.storeProductId').lean();
+    return res.status(201).json({ success: true, data: populatedOrder });
   } catch (error) {
     console.error('Razorpay verify-payment error:', error);
     return res.status(500).json({

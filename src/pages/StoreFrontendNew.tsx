@@ -205,12 +205,6 @@ const StoreFrontendNew = () => {
 
   const { isAuthenticated, checkAuth } = useStoreAuth();
 
-  // Check auth on mount
-  useEffect(() => {
-    if (subdomain) {
-      checkAuth(subdomain);
-    }
-  }, [subdomain]);
 
   const handleCheckout = () => {
     if (!store) return;

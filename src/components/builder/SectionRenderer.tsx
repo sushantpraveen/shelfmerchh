@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useStoreAuth } from '@/contexts/StoreAuthContext';
 import { BuilderSection } from '@/types/builder';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -23,6 +24,8 @@ import {
   Settings,
   Bell,
   HelpCircle,
+  LogOut,
+  ChevronDown,
 } from 'lucide-react';
 import { Product } from '@/types';
 import { cn } from '@/lib/utils';
@@ -288,6 +291,92 @@ const ProductCarousel: React.FC<{
   );
 };
 
+// Profile Dropdown Component for Live Store
+const ProfileDropdown: React.FC<{ storeSlug?: string }> = ({ storeSlug }) => {
+  const { isAuthenticated, customer, logout } = useStoreAuth();
+  const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    if (storeSlug) {
+      logout(storeSlug);
+      setIsOpen(false);
+      navigate(buildStorePath('/', storeSlug));
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <Link
+        to={storeSlug ? buildStorePath('/auth', storeSlug) : '/auth'}
+        aria-label="Profile"
+        className="h-10 w-10 inline-flex items-center justify-center rounded-full hover:bg-muted transition-colors"
+      >
+        <User className="h-5 w-5 text-muted-foreground" />
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+    >
+      <button
+        className="h-10 inline-flex items-center justify-center gap-2 rounded-full hover:bg-muted transition-colors px-3"
+        aria-label="Profile"
+      >
+        <User className="h-5 w-5 text-muted-foreground" />
+        <ChevronDown className={cn("h-3 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full right-0 w-56 z-50 pt-2">
+          <div className="bg-popover border border-border rounded-xl shadow-xl py-2 overflow-hidden bg-white text-popover-foreground">
+            <div className="px-4 py-3 border-b border-border/50 mb-1">
+              <p className="text-sm font-semibold truncate">{customer?.name || 'Customer'}</p>
+              <p className="text-xs text-muted-foreground truncate">{customer?.email}</p>
+            </div>
+            <Link
+              to={storeSlug ? buildStorePath('/profile', storeSlug) : "#"}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              <User className="h-4 w-4 text-muted-foreground" />
+              Profile
+            </Link>
+            <Link
+              to={storeSlug ? buildStorePath('/orders', storeSlug) : "#"}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              <Package className="h-4 w-4 text-muted-foreground" />
+              My Orders
+            </Link>
+            <Link
+              to={storeSlug ? buildStorePath('/settings', storeSlug) : "#"}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              <Settings className="h-4 w-4 text-muted-foreground" />
+              Settings
+            </Link>
+            <div className="border-t border-border my-1" />
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 text-left font-medium"
+            >
+              <LogOut className="h-4 w-4" />
+              Log out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SectionRenderer: React.FC<SectionRendererProps> = ({
   section,
   products = [],
@@ -401,7 +490,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
         const storeNameStyle = section.settings.storeNameStyle || {};
 
         return (
-          <div style={headerSectionStyle} className="border-b">
+          <div style={headerSectionStyle} className={cn("border-b", "relative z-40")}>
             <div className="container mx-auto">
               <div className="flex items-center justify-between gap-6 py-4">
                 {/* Left: Store name or logo */}
@@ -513,6 +602,18 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({
                     >
                       <ShoppingCart className="h-5 w-5 text-muted-foreground" />
                     </Link>
+                  )}
+                  {section.settings.showProfile !== false && (
+                    isPreview ? (
+                      <div
+                        className={cn("h-10 w-10 inline-flex items-center justify-center rounded-full hover:bg-muted transition-colors pointer-events-none")}
+                        aria-label="Profile (Preview)"
+                      >
+                        <User className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <ProfileDropdown storeSlug={storeSlug} />
+                    )
                   )}
                   {customIcons
                     .filter((icon) => (icon.enabled ?? true) && icon.href)

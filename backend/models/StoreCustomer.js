@@ -18,6 +18,10 @@ const StoreCustomerSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    phoneNumber: {
+      type: String,
+      index: true,
+    },
     name: {
       type: String,
     },
@@ -37,6 +41,48 @@ const StoreCustomerSchema = new mongoose.Schema(
     marketingOptIn: {
       type: Boolean,
       default: false,
+    },
+    addresses: [
+      {
+        fullName: String,
+        address1: String,
+        address2: String,
+        city: String,
+        state: String,
+        zipCode: String,
+        country: { type: String, default: 'India' },
+        phone: String,
+        isDefault: { type: Boolean, default: false },
+        label: String, // Home, Office, etc.
+      }
+    ],
+    notificationPreferences: {
+      orderUpdates: { type: Boolean, default: true },
+      marketingEmails: { type: Boolean, default: false },
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false
+    },
+    isPhoneVerified: {
+      type: Boolean,
+      default: false
+    },
+    emailVerificationToken: {
+      type: String,
+      select: false,
+    },
+    emailVerificationTokenExpiry: {
+      type: Date,
+      select: false,
+    },
+    phoneVerificationToken: {
+      type: String,
+      select: false,
+    },
+    phoneVerificationTokenExpiry: {
+      type: Date,
+      select: false,
     },
     passwordResetOTP: {
       type: String,

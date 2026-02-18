@@ -117,6 +117,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children, subdomain 
 
     const clearCart = () => {
         setCart([]);
+        if (subdomain) {
+            localStorage.setItem(`cart_${subdomain}`, JSON.stringify([]));
+        }
     };
 
     const cartCount = cart.reduce((total, item) => total + item.quantity, 0);

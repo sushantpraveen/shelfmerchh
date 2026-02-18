@@ -14,6 +14,10 @@ import StoreProductPage from '@/pages/StoreProductPage';
 import StoreCheckoutPage from '@/pages/StoreCheckoutPage';
 // import StoreCustomerAccountPage from '@/pages/StoreCustomerAccountPage';
 import StoreAuthPage from '@/pages/StoreAuthPage';
+import StoreProfilePage from '@/pages/StoreProfilePage';
+import StoreOrdersPage from '@/pages/StoreOrdersPage';
+import StoreSettingsPage from '@/pages/StoreSettingsPage';
+import StoreOrderDetailPage from '@/pages/StoreOrderDetailPage';
 import { isTenantSubdomain, getTenantSlugFromLocation } from '@/utils/tenantUtils';
 
 /**
@@ -25,7 +29,7 @@ const StoreWrapper = ({ children }: { children: React.ReactNode }) => {
   const subdomain = getTenantSlugFromLocation(location, params) || '';
 
   return (
-    <StoreAuthProvider>
+    <StoreAuthProvider subdomain={subdomain}>
       <CartProvider subdomain={subdomain}>
         {children}
       </CartProvider>
@@ -46,6 +50,10 @@ export function StoreRoutes() {
           {/* <Route path="/account" element={<StoreCustomerAccountPage />} /> */}
           <Route path="/product/:productId" element={<StoreProductPage />} />
           <Route path="/checkout" element={<StoreCheckoutPage />} />
+          <Route path="/profile" element={<StoreProfilePage />} />
+          <Route path="/orders" element={<StoreOrdersPage />} />
+          <Route path="/orders/:orderId" element={<StoreOrderDetailPage />} />
+          <Route path="/settings" element={<StoreSettingsPage />} />
         </Routes>
       </StoreWrapper>
     );
@@ -60,6 +68,10 @@ export function StoreRoutes() {
         {/* <Route path="/store/:subdomain/account" element={<StoreCustomerAccountPage />} /> */}
         <Route path="/store/:subdomain/product/:productId" element={<StoreProductPage />} />
         <Route path="/store/:subdomain/checkout" element={<StoreCheckoutPage />} />
+        <Route path="/store/:subdomain/profile" element={<StoreProfilePage />} />
+        <Route path="/store/:subdomain/orders" element={<StoreOrdersPage />} />
+        <Route path="/store/:subdomain/orders/:orderId" element={<StoreOrderDetailPage />} />
+        <Route path="/store/:subdomain/settings" element={<StoreSettingsPage />} />
       </Routes>
     </StoreWrapper>
   );

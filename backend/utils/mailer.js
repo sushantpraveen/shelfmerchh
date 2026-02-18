@@ -425,11 +425,163 @@ const sendMerchantOrderNotification = async (merchantEmail, order, storeName, at
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Merchant order notification sent:', info.messageId);
+    console.log(`[Mailer] Merchant order notification sent successfully to ${merchantEmail}. MessageId: ${info.messageId}`);
     return info;
   } catch (error) {
-    console.error('Error sending merchant order notification:', error);
+    console.error(`[Mailer] Error sending merchant order notification to ${merchantEmail}:`, error);
     // Don't throw error to avoid breaking the checkout flow if email fails
+    return null;
+  }
+};
+
+/**
+ * Send order confirmation email to customer
+ * @param {string} customerEmail - Customer's email address
+ * @param {object} order - Order details
+ * @param {object} store - Store details
+ * @param {Array} [attachments] - Optional attachments (e.g., PDF invoice)
+ * @returns {Promise<void>}
+ */
+const sendCustomerOrderConfirmation = async (customerEmail, order, store, attachments = []) => {
+  try {
+    const transporter = createTransporter();
+
+    const formatCurrency = (amount) => {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+      }).format(amount);
+    };
+
+    const itemsRows = order.items.map(item => `
+      <tr>
+        <td style="padding: 12px; border-bottom: 1px solid #f3f4f6; vertical-align: top;">
+          <div style="font-weight: bold; font-size: 14px; color: #1a1a1a;">${item.productName}</div>
+          <div style="font-size: 12px; color: #666; margin-top: 4px;">
+            ${item.variant?.size ? `Size: ${item.variant.size}` : ''}
+            ${item.variant?.color ? ` | Color: ${item.variant.color}` : ''}
+          </div>
+        </td>
+        <td style="padding: 12px; border-bottom: 1px solid #f3f4f6; text-align: center; vertical-align: middle; color: #1a1a1a;">${item.quantity}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #f3f4f6; text-align: right; vertical-align: middle; font-weight: bold; color: #1a1a1a;">${formatCurrency(item.price * item.quantity)}</td>
+      </tr>
+    `).join('');
+
+    const mailOptions = {
+      from: `"${store.storeName || 'ShelfMerch'}" <${process.env.EMAIL_USER}@gmail.com>`,
+      to: customerEmail,
+      subject: `Order Confirmed – Invoice #${order._id.toString().slice(-8).toUpperCase()}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Order Confirmation</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 0; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 40px; border-radius: 16px; margin: 20px 0; border: 1px solid #e5e7eb;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #16a34a; margin: 0; font-size: 28px;">Order Confirmed!</h1>
+              <p style="color: #666; margin-top: 8px; font-size: 16px;">Thank you for your purchase from <strong>${store.storeName || 'our store'}</strong></p>
+            </div>
+
+            <div style="background-color: #f9fafb; border-radius: 12px; padding: 20px; margin-bottom: 30px; border: 1px solid #f3f4f6;">
+              <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #e5e7eb;">
+                <p style="margin: 0; font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold;">Order ID</p>
+                <p style="margin: 0; font-weight: bold; font-size: 15px;">#${order._id.toString().toUpperCase()}</p>
+              </div>
+
+              <h3 style="margin: 0 0 15px 0; font-size: 16px; font-weight: bold; color: #111;">Order Summary</h3>
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background-color: #f3f4f6;">
+                    <th style="padding: 10px; text-align: left; font-size: 12px; color: #666; text-transform: uppercase;">Item</th>
+                    <th style="padding: 10px; text-align: center; font-size: 12px; color: #666; text-transform: uppercase;">Qty</th>
+                    <th style="padding: 10px; text-align: right; font-size: 12px; color: #666; text-transform: uppercase;">Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsRows}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="2" style="padding: 15px 10px 5px 10px; text-align: right; color: #666;">Subtotal:</td>
+                    <td style="padding: 15px 10px 5px 10px; text-align: right; font-weight: 500;">${formatCurrency(order.subtotal)}</td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="padding: 5px 10px; text-align: right; color: #666;">Shipping:</td>
+                    <td style="padding: 5px 10px; text-align: right; font-weight: 500;">${formatCurrency(order.shipping)}</td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="padding: 5px 10px; text-align: right; color: #666;">Tax:</td>
+                    <td style="padding: 5px 10px; text-align: right; font-weight: 500;">${formatCurrency(order.tax)}</td>
+                  </tr>
+                  <tr style="font-size: 18px;">
+                    <td colspan="2" style="padding: 15px 10px; text-align: right; font-weight: bold; color: #111; border-top: 2px solid #e5e7eb;">Total Paid:</td>
+                    <td style="padding: 15px 10px; text-align: right; font-weight: bold; color: #16a34a; border-top: 2px solid #e5e7eb;">${formatCurrency(order.total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div style="display: table; width: 100%; margin-bottom: 30px;">
+              <div style="display: table-cell; width: 50%; padding-right: 15px; vertical-align: top;">
+                <p style="margin: 0 0 8px 0; font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold;">Shipping Address</p>
+                <div style="font-size: 14px; color: #444; line-height: 1.5; background-color: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #f3f4f6;">
+                  <strong>${order.shippingAddress?.fullName}</strong><br>
+                  ${order.shippingAddress?.address1}<br>
+                  ${order.shippingAddress?.address2 ? order.shippingAddress.address2 + '<br>' : ''}
+                  ${order.shippingAddress?.city}, ${order.shippingAddress?.state} - ${order.shippingAddress?.zipCode}<br>
+                  ${order.shippingAddress?.country}
+                </div>
+              </div>
+              <div style="display: table-cell; width: 50%; padding-left: 15px; vertical-align: top;">
+                <p style="margin: 0 0 8px 0; font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold;">Payment Info</p>
+                <div style="font-size: 14px; color: #444; line-height: 1.5; background-color: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #f3f4f6;">
+                  <strong>Method:</strong> ${order.payment?.method?.toUpperCase() || 'COD'}<br>
+                  <strong>Email:</strong> ${customerEmail}<br>
+                  <strong>Date:</strong> ${new Date(order.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                </div>
+              </div>
+            </div>
+
+            <div style="text-align: center; border-top: 1px solid #e5e7eb; padding-top: 30px; margin-top: 10px; color: #999; font-size: 12px;">
+              <p style="margin-bottom: 10px;">If you have any questions about your order, please contact our support team.</p>
+              <p>© ${new Date().getFullYear()} ${store.storeName || 'ShelfMerch'}. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `
+        Order Confirmed!
+        
+        Thank you for your purchase from ${store.storeName || 'our store'}.
+        
+        Order Details:
+        Order ID: #${order._id}
+        Date: ${new Date(order.createdAt).toLocaleString('en-IN')}
+        Total Paid: ${formatCurrency(order.total)}
+        
+        Items:
+        ${order.items.map(item => `- ${item.productName} (Qty: ${item.quantity}) - ${formatCurrency(item.price * item.quantity)}`).join('\n')}
+        
+        Shipping Address:
+        ${order.shippingAddress?.fullName}
+        ${order.shippingAddress?.address1}
+        ${order.shippingAddress?.city}, ${order.shippingAddress?.state} - ${order.shippingAddress?.zipCode}
+        
+        Thank you for shopping with us!
+      `,
+      attachments: attachments
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[Mailer] Customer order confirmation email sent successfully to ${customerEmail}. MessageId: ${info.messageId}`);
+    return info;
+  } catch (error) {
+    console.error(`[Mailer] Error sending customer order confirmation email to ${customerEmail}:`, error);
     return null;
   }
 };
@@ -439,5 +591,6 @@ module.exports = {
   sendPasswordResetOTP,
   sendOTP,
   sendMerchantOrderNotification,
+  sendCustomerOrderConfirmation,
 };
 
