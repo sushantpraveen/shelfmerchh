@@ -13,12 +13,12 @@ import { Loader2 } from 'lucide-react';
 import { getProductImageGroups } from '@/utils/productImageUtils';
 import CartDrawer from '@/components/storefront/CartDrawer';
 import SectionRenderer from '@/components/builder/SectionRenderer';
-import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
+import EnhancedFooter from '@/components/storefront/EnhancedFooter';
+import StoreLayout from '@/components/storefront/StoreLayout';
 import EnhancedHeroSection from '@/components/storefront/EnhancedHeroSection';
 import EnhancedProductsSection from '@/components/storefront/EnhancedProductsSection';
 import AboutSection from '@/components/storefront/AboutSection';
 import NewsletterSection from '@/components/storefront/NewsletterSection';
-import EnhancedFooter from '@/components/storefront/EnhancedFooter';
 
 const StoreFrontendNew = () => {
   const { user, isMerchant, isAdmin } = useAuth();
@@ -264,22 +264,7 @@ const StoreFrontendNew = () => {
   const builderStyles = usingBuilder ? store.builder!.globalStyles : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Store Header - only show if builder doesn't have a header section */}
-      {!hasBuilderHeader && (
-        <EnhancedStoreHeader
-          storeName={store.storeName}
-          storeSlug={store.subdomain}
-          navLinks={[
-            { name: 'Products', href: buildStorePath('/products', store.subdomain) },
-            { name: 'About', href: '#about' },
-            { name: 'Contact', href: '/support/contact-us' },
-          ]}
-          cartItemCount={cartCount}
-          onCartClick={() => setIsCartOpen(true)}
-          primaryColor={(store as any)?.settings?.primaryColor || theme.colors.primary || '#16a34a'}
-        />
-      )}
+    <StoreLayout store={store} products={products}>
 
       {/* Render Builder Layout or Default Layout */}
       {usingBuilder && activePage ? (
@@ -334,25 +319,8 @@ const StoreFrontendNew = () => {
         </>
       )}
 
-      {/* Footer - only show if builder doesn't have a footer section */}
-      {/* {!hasBuilderFooter && (
-        <EnhancedFooter
-          storeName={store.storeName}
-          description={store.description}
-          storeSlug={store.subdomain}
-        />
-      )} */}
-
-      {/* Cart Drawer */}
-      <CartDrawer
-        open={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        cart={cart}
-        onUpdateQuantity={updateQuantity}
-        onRemove={removeFromCart}
-        onCheckout={handleCheckout}
-      />
-    </div>
+      {/* Global Cart Drawer is handled by StoreLayout */}
+    </StoreLayout>
   );
 };
 

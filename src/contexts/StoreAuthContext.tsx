@@ -24,6 +24,7 @@ export interface StoreCustomer {
     storeId?: string;
     isEmailVerified?: boolean;
     isPhoneVerified?: boolean;
+    googleId?: string;
     addresses?: StoreCustomerAddress[];
     notificationPreferences?: {
         orderUpdates: boolean;
@@ -52,6 +53,8 @@ interface StoreAuthContextType {
     deleteAddress: (subdomain: string, addressId: string) => Promise<boolean>;
     sendPhoneVerificationOtp: (subdomain: string, phoneNumber: string) => Promise<boolean>;
     confirmPhoneVerificationOtp: (subdomain: string, otp: string) => Promise<boolean>;
+    sendEmailVerificationOtp: (subdomain: string, email: string) => Promise<boolean>;
+    confirmEmailVerificationOtp: (subdomain: string, otp: string) => Promise<boolean>;
     updateNotifications: (subdomain: string, prefs: { orderUpdates?: boolean; marketingEmails?: boolean }) => Promise<boolean>;
     deleteAccount: (subdomain: string) => Promise<boolean>;
 }
@@ -477,6 +480,57 @@ export const StoreAuthProvider: React.FC<{ children: React.ReactNode; subdomain?
         }
     };
 
+    const sendEmailVerificationOtp = async (subdomain: string, email: string): Promise<boolean> => {
+        try {
+            const token = localStorage.getItem(`store_token_${subdomain}`);
+            const resp = await fetch(`${API_BASE}/store-auth/verify-email/send`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ email }),
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                toast.success('Verification code sent to email');
+                return true;
+            } else {
+                toast.error(data.message || 'Failed to send verification code');
+                return false;
+            }
+        } catch (err) {
+            console.error('Send email verification error', err);
+            return false;
+        }
+    };
+
+    const confirmEmailVerificationOtp = async (subdomain: string, otp: string): Promise<boolean> => {
+        try {
+            const token = localStorage.getItem(`store_token_${subdomain}`);
+            const resp = await fetch(`${API_BASE}/store-auth/verify-email/confirm`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ otp }),
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                setCustomer(data.customer);
+                toast.success('Email verified successfully');
+                return true;
+            } else {
+                toast.error(data.message || 'Invalid verification code');
+                return false;
+            }
+        } catch (err) {
+            console.error('Confirm email verification error', err);
+            return false;
+        }
+    };
+
     const updateNotifications = async (subdomain: string, prefs: { orderUpdates?: boolean; marketingEmails?: boolean }): Promise<boolean> => {
         try {
             const token = localStorage.getItem(`store_token_${subdomain}`);
@@ -547,6 +601,8 @@ export const StoreAuthProvider: React.FC<{ children: React.ReactNode; subdomain?
             deleteAddress,
             sendPhoneVerificationOtp,
             confirmPhoneVerificationOtp,
+            sendEmailVerificationOtp,
+            confirmEmailVerificationOtp,
             updateNotifications,
             deleteAccount
         }}>

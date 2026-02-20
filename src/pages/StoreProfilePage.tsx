@@ -16,6 +16,7 @@ import {
     Pencil,
     Trash2,
     CheckCircle2,
+    Info,
     AlertCircle,
     Loader2,
     ArrowLeft
@@ -23,7 +24,7 @@ import {
 import { buildStorePath } from '@/utils/tenantUtils';
 import AddressModal from '@/components/storefront/AddressModal';
 import { toast } from 'sonner';
-import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
+import StoreLayout from '@/components/storefront/StoreLayout';
 import { storeApi } from '@/lib/api';
 import { Store } from '@/types';
 
@@ -39,7 +40,9 @@ const StoreProfilePage: React.FC = () => {
         updateAddress,
         addAddress,
         sendPhoneVerificationOtp,
-        confirmPhoneVerificationOtp
+        confirmPhoneVerificationOtp,
+        sendEmailVerificationOtp,
+        confirmEmailVerificationOtp
     } = useStoreAuth();
     const { cartCount, setIsCartOpen } = useCart();
 
@@ -51,6 +54,7 @@ const StoreProfilePage: React.FC = () => {
 
     // Auth logic for verification
     const [verificationStep, setVerificationStep] = useState<'IDLE' | 'OTP'>('IDLE');
+    const [verifyingField, setVerifyingField] = useState<'EMAIL' | 'PHONE' | null>(null);
     const [otp, setOtp] = useState('');
     const [isVerifying, setIsVerifying] = useState(false);
 
@@ -98,7 +102,11 @@ const StoreProfilePage: React.FC = () => {
         e.preventDefault();
         setIsSaving(true);
         try {
-            await updateProfile(subdomain, { name });
+            await updateProfile(subdomain, {
+                name,
+                email,
+                phoneNumber: phone
+            });
         } finally {
             setIsSaving(false);
         }
@@ -110,9 +118,26 @@ const StoreProfilePage: React.FC = () => {
             return;
         }
         setIsVerifying(true);
-        const success = await sendPhoneVerificationOtp(subdomain, phone);
+        const success = await sendPhoneVerificationOtp(subdomain!, phone);
         setIsVerifying(false);
-        if (success) setVerificationStep('OTP');
+        if (success) {
+            setVerifyingField('PHONE');
+            setVerificationStep('OTP');
+        }
+    };
+
+    const handleVerifyEmail = async () => {
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            toast.error('Please enter a valid email address');
+            return;
+        }
+        setIsVerifying(true);
+        const success = await sendEmailVerificationOtp(subdomain!, email);
+        setIsVerifying(false);
+        if (success) {
+            setVerifyingField('EMAIL');
+            setVerificationStep('OTP');
+        }
     };
 
     const handleConfirmOtp = async () => {
@@ -121,10 +146,16 @@ const StoreProfilePage: React.FC = () => {
             return;
         }
         setIsVerifying(true);
-        const success = await confirmPhoneVerificationOtp(subdomain, otp);
+        let success = false;
+        if (verifyingField === 'PHONE') {
+            success = await confirmPhoneVerificationOtp(subdomain!, otp);
+        } else if (verifyingField === 'EMAIL') {
+            success = await confirmEmailVerificationOtp(subdomain!, otp);
+        }
         setIsVerifying(false);
         if (success) {
             setVerificationStep('IDLE');
+            setVerifyingField(null);
             setOtp('');
         }
     };
@@ -149,14 +180,7 @@ const StoreProfilePage: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-background pb-20">
-            <EnhancedStoreHeader
-                storeName={store?.storeName || 'Store'}
-                cartItemCount={cartCount}
-                onCartClick={() => setIsCartOpen(true)}
-                storeSlug={subdomain}
-            />
-
+        <StoreLayout store={store}>
             <main className="container mx-auto max-w-4xl px-4 py-8">
                 <div className="mb-8">
                     <Link
@@ -197,46 +221,28 @@ const StoreProfilePage: React.FC = () => {
                                             <Input
                                                 id="email"
                                                 value={email}
-                                                disabled
-                                                className="pl-10 bg-muted/50"
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                disabled={customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId}
+                                                className={`pl-10 ${(customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId) ? 'bg-muted/50' : ''}`}
+                                                placeholder="Enter your email"
                                             />
-                                            {customer.isEmailVerified ? (
-                                                <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-600" />
-                                            ) : (
-                                                <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-amber-500" />
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="phone">Phone Number</Label>
-                                        <div className="relative">
-                                            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                            <Input
-                                                id="phone"
-                                                value={phone}
-                                                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                                                placeholder="Enter 10-digit mobile number"
-                                                className="pl-10"
-                                                disabled={customer.isPhoneVerified && !!customer.phoneNumber}
-                                            />
-                                            {customer.isPhoneVerified ? (
+                                            {(customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId) ? (
                                                 <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-600" />
                                             ) : (
                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                                     <span className="group relative">
-                                                        <AlertCircle className="h-4 w-4 text-amber-500 cursor-help" />
-                                                        <span className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                                            Verify phone to enable checkout
+                                                        <Info className="h-4 w-4 text-amber-500 cursor-help" />
+                                                        <span className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
+                                                            Please verify to proceed with checkout.
                                                         </span>
                                                     </span>
-                                                    {verificationStep === 'IDLE' && (
+                                                    {verificationStep === 'IDLE' && email && (
                                                         <Button
                                                             type="button"
                                                             variant="link"
                                                             size="sm"
                                                             className="h-auto p-0 text-green-600 font-semibold"
-                                                            onClick={handleVerifyPhone}
+                                                            onClick={handleVerifyEmail}
                                                             disabled={isVerifying}
                                                         >
                                                             Verify
@@ -245,13 +251,12 @@ const StoreProfilePage: React.FC = () => {
                                                 </div>
                                             )}
                                         </div>
-
-                                        {verificationStep === 'OTP' && (
+                                        {verificationStep === 'OTP' && verifyingField === 'EMAIL' && (
                                             <div className="mt-4 p-4 bg-muted/30 rounded-xl border border-dashed border-border">
-                                                <Label htmlFor="otp">Enter 6-digit Verification Code</Label>
+                                                <Label htmlFor="otp">Enter 6-digit Email Code</Label>
                                                 <div className="flex gap-2 mt-2">
                                                     <Input
-                                                        id="otp"
+                                                        id="otp-email"
                                                         value={otp}
                                                         onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                                         placeholder="000000"
@@ -268,7 +273,85 @@ const StoreProfilePage: React.FC = () => {
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
-                                                        onClick={() => setVerificationStep('IDLE')}
+                                                        onClick={() => {
+                                                            setVerificationStep('IDLE');
+                                                            setVerifyingField(null);
+                                                            setOtp('');
+                                                        }}
+                                                        disabled={isVerifying}
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="phone">Phone Number</Label>
+                                        <div className="relative">
+                                            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                id="phone"
+                                                value={phone}
+                                                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                                placeholder="Enter 10-digit mobile number"
+                                                className={`pl-10 ${(customer.isPhoneVerified && !!customer.phoneNumber) ? 'bg-muted/50' : ''}`}
+                                                disabled={customer.isPhoneVerified && !!customer.phoneNumber}
+                                            />
+                                            {(customer.isPhoneVerified || (customer as any).phoneVerified) ? (
+                                                <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-600" />
+                                            ) : (
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    <span className="group relative">
+                                                        <Info className="h-4 w-4 text-amber-500 cursor-help" />
+                                                        <span className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
+                                                            Please verify to proceed with checkout.
+                                                        </span>
+                                                    </span>
+                                                    {verificationStep === 'IDLE' && phone && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="link"
+                                                            size="sm"
+                                                            className="h-auto p-0 text-green-600 font-semibold"
+                                                            onClick={handleVerifyPhone}
+                                                            disabled={isVerifying}
+                                                        >
+                                                            Verify
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {verificationStep === 'OTP' && verifyingField === 'PHONE' && (
+                                            <div className="mt-4 p-4 bg-muted/30 rounded-xl border border-dashed border-border">
+                                                <Label htmlFor="otp">Enter 6-digit Phone Code</Label>
+                                                <div className="flex gap-2 mt-2">
+                                                    <Input
+                                                        id="otp-phone"
+                                                        value={otp}
+                                                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                                        placeholder="000000"
+                                                        className="max-w-[150px] tracking-widest text-center text-lg font-bold"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleConfirmOtp}
+                                                        disabled={isVerifying}
+                                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                                    >
+                                                        {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm'}
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            setVerificationStep('IDLE');
+                                                            setVerifyingField(null);
+                                                            setOtp('');
+                                                        }}
                                                         disabled={isVerifying}
                                                     >
                                                         Cancel
@@ -398,7 +481,7 @@ const StoreProfilePage: React.FC = () => {
                 initialData={editingAddress}
                 title={editingAddress ? "Edit Address" : "Add New Address"}
             />
-        </div>
+        </StoreLayout>
     );
 };
 

@@ -34,6 +34,24 @@ async function tenantResolver(req, res, next) {
       tenantSlug = req.params.subdomain;
     }
 
+    // NEW: Manual parsing from URL if req.params is not yet populated by router
+    if (!tenantSlug) {
+      const urlParts = req.originalUrl.split('/');
+
+      const apiPrefixIndex = urlParts.indexOf('api');
+      if (apiPrefixIndex !== -1 && urlParts.length > apiPrefixIndex + 2) {
+        const routeType = urlParts[apiPrefixIndex + 1];
+        if (routeType.startsWith('store-') || routeType === 'reviews') {
+          tenantSlug = urlParts[apiPrefixIndex + 2];
+        }
+      } else {
+        const storeIndex = urlParts.indexOf('store');
+        if (storeIndex !== -1 && urlParts.length > storeIndex + 1) {
+          tenantSlug = urlParts[storeIndex + 1];
+        }
+      }
+    }
+
     // Attach tenantSlug to request
     req.tenantSlug = tenantSlug;
 
@@ -52,9 +70,10 @@ async function tenantResolver(req, res, next) {
           // Tenant slug exists but store not found
           req.tenant = null;
           console.warn(`[TenantResolver] Tenant slug '${tenantSlug}' not found or inactive`);
-          
+
           // Return 404 for API routes, let frontend handle for web routes
-          if (req.path.startsWith('/api/')) {
+          const path = req.path || req.originalUrl || '';
+          if (path.startsWith('/api/')) {
             return res.status(404).json({
               success: false,
               message: `Store '${tenantSlug}' not found or is inactive`
@@ -64,8 +83,9 @@ async function tenantResolver(req, res, next) {
       } catch (error) {
         console.error('[TenantResolver] Error loading tenant:', error);
         req.tenant = null;
-        
-        if (req.path.startsWith('/api/')) {
+
+        const path = req.path || req.originalUrl || '';
+        if (path.startsWith('/api/')) {
           return res.status(500).json({
             success: false,
             message: 'Error resolving tenant'

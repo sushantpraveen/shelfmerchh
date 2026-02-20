@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/api';
@@ -8,11 +8,18 @@ import logo from '@/assets/logo.webp';
 
 const VerifyPhone: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { refreshUser, user } = useAuth();
     const [phone, setPhone] = useState(user?.phoneNumber || '');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
     const [serverOtp, setServerOtp] = useState('');
+
+    // Location state passed from the verification gate
+    const locationState = (location.state || {}) as {
+        returnTo?: string;
+        triggerPublish?: boolean;
+    };
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSendOtp = async () => {
@@ -51,7 +58,13 @@ const VerifyPhone: React.FC = () => {
             if (res.success) {
                 toast.success('Phone verified successfully!');
                 await refreshUser(); // Refresh user data to update verification status
-                navigate('/dashboard');
+
+                // Return to the page that triggered verification (e.g. Design Editor)
+                if (locationState.returnTo) {
+                    navigate(locationState.returnTo);
+                } else {
+                    navigate('/dashboard');
+                }
             }
         } catch (err: any) {
             toast.error(err.message || 'Invalid OTP');
@@ -86,6 +99,11 @@ const VerifyPhone: React.FC = () => {
                 <div className="flex flex-col items-center mb-8">
                     <img src={logo} alt="ShelfMerch Logo" className="h-12 mb-6" />
                     <h2 className="text-2xl font-bold text-black text-center">Verify Your Phone</h2>
+                    {locationState.triggerPublish && (
+                        <p className="mt-3 text-sm text-center text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">
+                            ✅ Almost there! Phone verification is required to <strong>Add Product</strong>. Your design is saved.
+                        </p>
+                    )}
                 </div>
 
                 {step === 'PHONE' ? (
@@ -151,7 +169,7 @@ const VerifyPhone: React.FC = () => {
 
                 <div className="mt-8 flex justify-center">
                     <button
-                        onClick={() => navigate('/dashboard')}
+                        onClick={() => navigate(locationState.returnTo || '/dashboard')}
                         className="text-gray-400 text-sm hover:text-gray-600 transition-colors"
                     >
                         Skip for now

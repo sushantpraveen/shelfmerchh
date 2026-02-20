@@ -2399,6 +2399,69 @@ const DesignEditor: React.FC = () => {
         });
         return;
       }
+
+      // --- VERIFICATION GATE ---
+      // Save design state before any verification redirect so it can be restored
+      const saveDesignStateForVerification = () => {
+        if (!id) return;
+        try {
+          const designState = {
+            elements,
+            selectedColors,
+            selectedSizes,
+            selectedSizesByColor,
+            currentView,
+            designUrlsByPlaceholder,
+            placementsByView,
+            savedPreviewImages,
+            displacementSettings,
+            primaryColorHex,
+          };
+          sessionStorage.setItem(`designer_state_${id}`, JSON.stringify(designState));
+        } catch (err) {
+          console.error('Failed to save design state before verification redirect:', err);
+        }
+      };
+
+      if (!user.isEmailVerified && !user.isPhoneVerified) {
+        // Both unverified — go to email first, then phone
+        saveDesignStateForVerification();
+        toast.info('Please verify your email and phone before adding a product.');
+        navigate('/verify-email', {
+          state: {
+            returnTo: `/designer/${id}`,
+            nextVerification: 'phone', // after email, chain to phone
+            triggerPublish: true,
+          },
+        });
+        return;
+      }
+
+      if (!user.isEmailVerified) {
+        saveDesignStateForVerification();
+        toast.info('Please verify your email to continue.');
+        navigate('/verify-email', {
+          state: {
+            returnTo: `/designer/${id}`,
+            triggerPublish: true,
+          },
+        });
+        return;
+      }
+
+      if (!user.isPhoneVerified) {
+        saveDesignStateForVerification();
+        toast.info('Please verify your phone number to continue.');
+        navigate('/verify-phone', {
+          state: {
+            returnTo: `/designer/${id}`,
+            triggerPublish: true,
+          },
+        });
+        return;
+      }
+      // --- END VERIFICATION GATE ---
+
       if (!['merchant', 'superadmin'].includes(user.role)) {
         toast.error('Only merchants or superadmins can publish');
         return;

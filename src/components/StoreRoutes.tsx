@@ -19,6 +19,7 @@ import StoreOrdersPage from '@/pages/StoreOrdersPage';
 import StoreSettingsPage from '@/pages/StoreSettingsPage';
 import StoreOrderDetailPage from '@/pages/StoreOrderDetailPage';
 import { isTenantSubdomain, getTenantSlugFromLocation } from '@/utils/tenantUtils';
+import StoreLayout from '@/components/storefront/StoreLayout';
 
 /**
  * StoreWrapper - A wrapper component to provide global state contexts

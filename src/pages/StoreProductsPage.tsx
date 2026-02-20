@@ -11,8 +11,8 @@ import { toast } from 'sonner';
 import { useStoreAuth } from '@/contexts/StoreAuthContext';
 import { useCart } from '@/contexts/CartContext';
 import CartDrawer from '@/components/storefront/CartDrawer';
-import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
 import EnhancedFooter from '@/components/storefront/EnhancedFooter';
+import StoreLayout from '@/components/storefront/StoreLayout';
 import EnhancedProductCard from '@/components/storefront/EnhancedProductCard';
 import SectionRenderer from '@/components/builder/SectionRenderer';
 import {
@@ -141,6 +141,15 @@ const StoreProductsPage: React.FC = () => {
       console.error('Failed to restore store filters from sessionStorage', e);
     }
   }, [subdomain]);
+
+  // Sync searchQuery with 'q' query parameter from URL (for header search)
+  useEffect(() => {
+    const query = new URLSearchParams(location.search).get('q');
+    if (query) {
+      setSearchQuery(query);
+      // Optional: Clear the param after reading to keep URL clean, or leave it
+    }
+  }, [location.search]);
 
   // Helper to persist current filter state for this store
   const persistFilters = useCallback(
@@ -732,37 +741,16 @@ const StoreProductsPage: React.FC = () => {
     : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Store Header */}
-      {builderHeader ? (
-        <SectionRenderer
-          section={builderHeader}
-          products={products}
-          globalStyles={store.builder!.globalStyles}
-          isPreview={false}
-          storeSlug={store.subdomain}
-        />
-      ) : (
-        <EnhancedStoreHeader
-          storeName={store.storeName}
-          storeSlug={store.subdomain}
-          navLinks={[
-            { name: 'Products', href: buildStorePath('/products', store.subdomain) },
-            { name: 'About', href: '#about' },
-            { name: 'Contact', href: '/support/contact-us' },
-          ]}
-          cartItemCount={cartCount}
-          onCartClick={() => setIsCartOpen(true)}
-          onSearchClick={() => {
-            const searchInput = document.getElementById('product-search');
-            if (searchInput) {
-              (searchInput as HTMLInputElement).focus();
-            }
-          }}
-          primaryColor={(store as any)?.settings?.primaryColor || theme.colors.primary || '#16a34a'}
-        />
-      )}
-
+    <StoreLayout
+      store={store}
+      products={allProducts}
+      onSearchClick={() => {
+        const searchInput = document.getElementById('product-search');
+        if (searchInput) {
+          (searchInput as HTMLInputElement).focus();
+        }
+      }}
+    >
       {/* Hero Section */}
       <section className="relative bg-gradient-to-b from-muted/50 via-muted/30 to-background border-b border-border/50 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent" />
@@ -1121,24 +1109,6 @@ const StoreProductsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer */}
-      {builderFooter ? (
-        <SectionRenderer
-          section={builderFooter}
-          products={products}
-          globalStyles={store.builder!.globalStyles}
-          isPreview={false}
-          storeSlug={store.subdomain}
-        />
-      ) : (
-        <EnhancedFooter
-          storeName={store.storeName}
-          description={store.description || 'Premium custom merchandise designed with passion'}
-          storeSlug={store.subdomain}
-        />
-      )}
-
-      {/* Cart Drawer */}
       <CartDrawer
         open={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -1146,8 +1116,8 @@ const StoreProductsPage: React.FC = () => {
         onUpdateQuantity={updateQuantity}
         onRemove={removeFromCart}
         onCheckout={handleCheckout}
-      />
-    </div>
+      /> */
+    </StoreLayout>
   );
 };
 

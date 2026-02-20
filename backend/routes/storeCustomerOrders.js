@@ -4,24 +4,7 @@ const StoreOrder = require('../models/StoreOrder');
 const { protect } = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 
-// Reuse verifyStoreToken logic from storeAuth without circular requires
-const verifyStoreToken = (req, res, next) => {
-  const header = req.header('Authorization') || '';
-  const token = header.replace('Bearer ', '');
-
-  if (!token) {
-    return res.status(401).json({ success: false, message: 'No auth token found' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.customer = decoded; // { customer: { id, storeId } }
-    next();
-  } catch (err) {
-    console.error('Customer token verification failed', err);
-    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
-  }
-};
+const { verifyStoreToken } = require('../middleware/auth');
 
 // GET /api/store-customer/orders
 // List orders for the authenticated store customer for the current store

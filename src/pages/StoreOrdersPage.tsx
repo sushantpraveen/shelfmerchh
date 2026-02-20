@@ -15,7 +15,7 @@ import {
     ExternalLink
 } from 'lucide-react';
 import { buildStorePath } from '@/utils/tenantUtils';
-import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
+import StoreLayout from '@/components/storefront/StoreLayout';
 import { storeApi, storeCustomerOrdersApi } from '@/lib/api';
 import { Store } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -133,15 +133,7 @@ const StoreOrdersPage: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-muted/30 flex flex-col">
-            <EnhancedStoreHeader
-                storeName={store?.storeName || 'Store'}
-                storeSlug={subdomain}
-                cartItemCount={cartCount}
-                onCartClick={() => setIsCartOpen(true)}
-                primaryColor={store?.settings?.primaryColor}
-            />
-
+        <StoreLayout store={store}>
             <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8">
                 <div className="mb-8">
                     <Link
@@ -210,7 +202,7 @@ const StoreOrdersPage: React.FC = () => {
                                                 <div className="flex-1 min-w-0">
                                                     {item.productId || item.storeProductId ? (
                                                         <Link
-                                                            to={buildStorePath(`/product/${typeof item.productId === 'object' ? item.productId._id : (item.storeProductId || item.productId)}`, subdomain)}
+                                                            to={buildStorePath(`/product/${(item.storeProductId as any)?._id || item.storeProductId || (item.productId as any)?._id || item.productId}`, subdomain)}
                                                             className="text-sm font-bold hover:text-green-600 transition-colors line-clamp-1 flex items-center gap-1"
                                                         >
                                                             {item.productName}
@@ -276,7 +268,7 @@ const StoreOrdersPage: React.FC = () => {
                     )}
                 </div>
             </main>
-        </div>
+        </StoreLayout>
     );
 };
 

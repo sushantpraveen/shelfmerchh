@@ -33,26 +33,14 @@ const sendCustomerTokenResponse = (customer, statusCode, res) => {
             id: customer._id,
             name: customer.name,
             email: customer.email,
+            phoneNumber: customer.phoneNumber,
+            isEmailVerified: customer.isEmailVerified,
+            isPhoneVerified: customer.isPhoneVerified,
         },
     });
 };
 
-// Middleware to verify Store Customer Token
-const verifyStoreToken = (req, res, next) => {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-
-    if (!token) {
-        return res.status(401).json({ success: false, message: 'No auth token found' });
-    }
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.customer = decoded; // { customer: { id, storeId } }
-        next();
-    } catch (err) {
-        res.status(401).json({ success: false, message: 'Invalid or expired token' });
-    }
-};
+const { verifyStoreToken } = require('../middleware/auth');
 
 // @route   POST /api/store-auth/otp/send
 router.post('/otp/send', async (req, res) => {
@@ -224,6 +212,9 @@ router.post('/signup/complete', verifyStoreToken, async (req, res) => {
                 id: customer._id,
                 name: customer.name,
                 email: customer.email,
+                phoneNumber: customer.phoneNumber,
+                isEmailVerified: customer.isEmailVerified,
+                isPhoneVerified: customer.isPhoneVerified,
             }
         });
     } catch (err) {
@@ -342,6 +333,14 @@ router.put('/me', verifyStoreToken, async (req, res) => {
         if (typeof marketingOptIn === 'boolean') {
             updates.marketingOptIn = marketingOptIn;
             updates['notificationPreferences.marketingEmails'] = marketingOptIn;
+        }
+        if (typeof email === 'string' && email.trim().length > 0) {
+            const cleanEmail = email.toLowerCase().trim();
+            const current = await StoreCustomer.findById(customerId);
+            if (current.email !== cleanEmail) {
+                updates.email = cleanEmail;
+                updates.isEmailVerified = false;
+            }
         }
         if (typeof phoneNumber === 'string') {
             const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
@@ -469,6 +468,61 @@ router.delete('/addresses/:addressId', verifyStoreToken, async (req, res) => {
 });
 
 // VERIFICATION
+// POST /api/store-auth/verify-email/send
+router.post('/verify-email/send', verifyStoreToken, async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ success: false, message: 'Valid email is required' });
+        }
+        const identifier = email.toLowerCase().trim();
+
+        const existing = await StoreCustomer.findOne({
+            storeId: req.customer.customer.storeId,
+            email: identifier,
+            _id: { $ne: req.customer.customer.id }
+        });
+        if (existing) {
+            return res.status(400).json({ success: false, message: 'This email is already linked to another account' });
+        }
+
+        const customer = await StoreCustomer.findById(req.customer.customer.id);
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        customer.emailVerificationToken = otp;
+        customer.emailVerificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
+        customer.email = identifier;
+        await customer.save();
+
+        await sendEmailOTP(identifier, otp, customer.name, 'verification');
+
+        res.json({ success: true, message: 'OTP sent to your email' });
+    } catch (err) {
+        console.error('Send Email Verification OTP Error:', err);
+        res.status(500).json({ success: false, message: 'Error sending OTP' });
+    }
+});
+
+// POST /api/store-auth/verify-email/confirm
+router.post('/verify-email/confirm', verifyStoreToken, async (req, res) => {
+    try {
+        const { otp } = req.body;
+        const customer = await StoreCustomer.findById(req.customer.customer.id).select('+emailVerificationToken +emailVerificationTokenExpiry');
+
+        if (customer.emailVerificationToken === otp && customer.emailVerificationTokenExpiry > Date.now()) {
+            customer.isEmailVerified = true;
+            customer.emailVerificationToken = undefined;
+            customer.emailVerificationTokenExpiry = undefined;
+            await customer.save();
+            res.json({ success: true, message: 'Email verified successfully', customer });
+        } else {
+            res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error verifying email' });
+    }
+});
+
 // POST /api/store-auth/verify-phone/send
 router.post('/verify-phone/send', verifyStoreToken, async (req, res) => {
     try {

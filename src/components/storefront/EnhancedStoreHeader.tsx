@@ -1,9 +1,10 @@
 import { Search, ShoppingBag, Menu, X, User, ChevronDown, Package, Settings, LogOut } from "lucide-react";
 import { useStoreAuth } from "@/contexts/StoreAuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { buildStorePath } from "@/utils/tenantUtils";
 import StoreNotificationBell from "./StoreNotificationBell";
+import { cn } from "@/lib/utils";
 
 interface EnhancedStoreHeaderProps {
   storeName: string;
@@ -29,6 +30,15 @@ const EnhancedStoreHeader = ({
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, customer, logout } = useStoreAuth();
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isSearchVisible && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isSearchVisible]);
 
   const navLinks = propNavLinks || [
     { name: "Products", href: "#products" },
@@ -40,6 +50,14 @@ const EnhancedStoreHeader = ({
     if (storeSlug) {
       logout(storeSlug);
       setIsProfileOpen(false);
+    }
+  };
+
+  const handleSearch = () => {
+    if (searchQuery.trim() && storeSlug) {
+      navigate(buildStorePath(`/products?q=${encodeURIComponent(searchQuery.trim())}`, storeSlug));
+      setIsSearchVisible(false);
+      setSearchQuery("");
     }
   };
 
@@ -162,13 +180,47 @@ const EnhancedStoreHeader = ({
 
             {/* Right Actions */}
             <div className="flex items-center gap-2 lg:gap-4 font-display">
-              <button
-                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Search"
-                onClick={onSearchClick}
-              >
-                <Search className="w-5 h-5" />
-              </button>
+              <div className="relative flex items-center">
+                <div className={cn(
+                  "flex items-center transition-all duration-300 overflow-hidden bg-muted/50 rounded-full",
+                  isSearchVisible ? "w-40 sm:w-64 px-3 py-1.5 opacity-100" : "w-0 opacity-0"
+                )}>
+                  <Search className="w-4 h-4 text-muted-foreground mr-2 shrink-0" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder="Search products..."
+                    className="bg-transparent border-none focus:outline-none text-sm w-full"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSearch();
+                      }
+                    }}
+                  />
+                  <button onClick={() => setIsSearchVisible(false)} className="ml-1">
+                    <X className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                </div>
+
+                <button
+                  className={cn(
+                    "p-2 text-muted-foreground hover:text-foreground transition-colors",
+                    isSearchVisible && "hidden"
+                  )}
+                  aria-label="Search"
+                  onClick={() => {
+                    if (onSearchClick) {
+                      onSearchClick();
+                    } else {
+                      setIsSearchVisible(true);
+                    }
+                  }}
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+              </div>
 
               <button
                 className="p-2 text-muted-foreground hover:text-foreground transition-colors relative"

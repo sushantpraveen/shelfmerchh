@@ -16,7 +16,7 @@ import {
     Trash2
 } from 'lucide-react';
 import { buildStorePath } from '@/utils/tenantUtils';
-import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
+import StoreLayout from '@/components/storefront/StoreLayout';
 import { storeApi } from '@/lib/api';
 import { Store } from '@/types';
 import { Switch } from '@/components/ui/switch';
@@ -101,14 +101,7 @@ const StoreSettingsPage: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-background pb-20 font-sans">
-            <EnhancedStoreHeader
-                storeName={store?.storeName || 'Store'}
-                cartItemCount={cartCount}
-                onCartClick={() => setIsCartOpen(true)}
-                storeSlug={subdomain}
-            />
-
+        <StoreLayout store={store}>
             <main className="container mx-auto max-w-2xl px-4 py-8">
                 <div className="mb-10">
                     <Link
@@ -228,7 +221,7 @@ const StoreSettingsPage: React.FC = () => {
                     </Button>
                 </div>
             </main>
-        </div>
+        </StoreLayout>
     );
 };
 

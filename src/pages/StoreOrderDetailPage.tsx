@@ -19,7 +19,7 @@ import {
     ShoppingBag
 } from 'lucide-react';
 import { buildStorePath } from '@/utils/tenantUtils';
-import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
+import StoreLayout from '@/components/storefront/StoreLayout';
 import { storeApi, storeCustomerOrdersApi } from '@/lib/api';
 import { Store } from '@/types';
 
@@ -147,14 +147,7 @@ const StoreOrderDetailPage: React.FC = () => {
 
     if (!isAuthenticated) {
         return (
-            <div className="min-h-screen bg-muted/30 flex flex-col">
-                <EnhancedStoreHeader
-                    storeName={store?.storeName || 'Store'}
-                    storeSlug={subdomain}
-                    cartItemCount={cartCount}
-                    onCartClick={() => setIsCartOpen(true)}
-                    primaryColor={store?.settings?.primaryColor}
-                />
+            <StoreLayout store={store}>
                 <main className="flex-1 flex items-center justify-center p-4">
                     <Card className="max-w-md w-full text-center p-8">
                         <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -164,20 +157,12 @@ const StoreOrderDetailPage: React.FC = () => {
                         </Button>
                     </Card>
                 </main>
-            </div>
+            </StoreLayout>
         );
     }
 
     return (
-        <div className="min-h-screen bg-muted/30 flex flex-col">
-            <EnhancedStoreHeader
-                storeName={store?.storeName || 'Store'}
-                storeSlug={subdomain}
-                cartItemCount={cartCount}
-                onCartClick={() => setIsCartOpen(true)}
-                primaryColor={store?.settings?.primaryColor}
-            />
-
+        <StoreLayout store={store}>
             <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8">
                 <div className="mb-6 flex items-center gap-4">
                     <Button
@@ -242,7 +227,12 @@ const StoreOrderDetailPage: React.FC = () => {
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h3 className="font-bold text-lg mb-1 leading-tight">{item.productName}</h3>
+                                                    <Link
+                                                        to={buildStorePath(`/product/${item.storeProductId?._id || item.storeProductId || item.productId?._id || item.productId}`, subdomain)}
+                                                        className="hover:text-green-600 transition-colors"
+                                                    >
+                                                        <h3 className="font-bold text-lg mb-1 leading-tight">{item.productName}</h3>
+                                                    </Link>
                                                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                                         {(item.variant?.size || item.variant?.color) && (
                                                             <p className="flex items-center gap-1">
@@ -354,7 +344,7 @@ const StoreOrderDetailPage: React.FC = () => {
                     </div>
                 )}
             </main>
-        </div>
+        </StoreLayout>
     );
 };
 

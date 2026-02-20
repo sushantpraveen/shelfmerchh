@@ -46,8 +46,8 @@ import { BuilderSection } from '@/types/builder';
 import ImageMagnifier from '@/components/storefront/ImageMagnifier';
 import { cn } from '@/lib/utils';
 import ReviewsSection from '@/components/reviews/ReviewsSection';
-import EnhancedStoreHeader from '@/components/storefront/EnhancedStoreHeader';
-import EnhancedFooter from '@/components/storefront/EnhancedFooter';
+import enhancedFooter from '@/components/storefront/EnhancedFooter';
+import StoreLayout from '@/components/storefront/StoreLayout';
 
 const mockReviews = [
   {
@@ -1250,19 +1250,64 @@ const StoreProductPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background" style={{ fontFamily: theme.fonts.body }}>
-      {/* Builder Layout */}
-      {usingBuilder ? (
-        <div>
-          {builderSections.map((section) => {
-            if (section.type === 'header') {
-              return (
-                <div key={section.id}>
-                  {renderHeader(section)}
-                </div>
-              );
-            }
-            if (section.type === 'announcement-bar') {
+    <StoreLayout store={store} products={products}>
+      <div style={{ fontFamily: theme.fonts.body }}>
+        {/* Builder Layout */}
+        {usingBuilder ? (
+          <div>
+            {builderSections.map((section) => {
+              if (section.type === 'header') {
+                return null; // Handled by StoreLayout
+              }
+              if (section.type === 'announcement-bar') {
+                return (
+                  <SectionRenderer
+                    key={section.id}
+                    section={section}
+                    products={products}
+                    globalStyles={store.builder?.globalStyles}
+                    isPreview={false}
+                  />
+                );
+              }
+              if (section.type === 'product-details') {
+                return (
+                  <div key={section.id}>
+                    {/* Breadcrumb - keep it with product details */}
+                    <div className="border-b bg-muted/30">
+                      <div className="container mx-auto px-4 py-3">
+                        <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Link to={`/store/${store.subdomain}`} className="hover:text-primary transition-colors flex items-center gap-1">
+                            <Home className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Home</span>
+                          </Link>
+                          <ChevronRight className="h-3.5 w-3.5" />
+                          <Link to={`/store/${store.subdomain}#products`} className="hover:text-primary transition-colors">
+                            Products
+                          </Link>
+                          <ChevronRight className="h-3.5 w-3.5" />
+                          <span className="text-foreground font-medium truncate max-w-[200px]">{product.name}</span>
+                        </nav>
+                      </div>
+                    </div>
+                    <main className="container mx-auto px-4 py-8 lg:py-12">
+                      {renderProductDetails()}
+                    </main>
+                  </div>
+                );
+              }
+              if (section.type === 'product-recommendations') {
+                return (
+                  <div key={section.id} className="container mx-auto px-4 pb-16">
+                    {renderRecommendations(section.settings?.heading, section.settings?.subheading)}
+                  </div>
+                );
+              }
+              if (section.type === 'footer') {
+                return null; // Handled by StoreLayout
+              }
+
+              // Default handler for other sections (text, image, video, etc)
               return (
                 <SectionRenderer
                   key={section.id}
@@ -1272,319 +1317,36 @@ const StoreProductPage = () => {
                   isPreview={false}
                 />
               );
-            }
-            if (section.type === 'product-details') {
-              return (
-                <div key={section.id}>
-                  {/* Breadcrumb - keep it with product details */}
-                  <div className="border-b bg-muted/30">
-                    <div className="container mx-auto px-4 py-3">
-                      <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Link to={`/store/${store.subdomain}`} className="hover:text-primary transition-colors flex items-center gap-1">
-                          <Home className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Home</span>
-                        </Link>
-                        <ChevronRight className="h-3.5 w-3.5" />
-                        <Link to={`/store/${store.subdomain}#products`} className="hover:text-primary transition-colors">
-                          Products
-                        </Link>
-                        <ChevronRight className="h-3.5 w-3.5" />
-                        <span className="text-foreground font-medium truncate max-w-[200px]">{product.name}</span>
-                      </nav>
-                    </div>
-                  </div>
-                  <main className="container mx-auto px-4 py-8 lg:py-12">
-                    {renderProductDetails()}
-
-                    {/* Tabs - included in product details section for now */}
-                    {/* <div className="mt-16">
-                      <Tabs defaultValue="description" className="w-full">
-                        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
-                          <TabsTrigger
-                            value="description"
-                            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3"
-                          >
-                            Description
-                          </TabsTrigger>
-                          <TabsTrigger
-                            value="reviews"
-                            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3"
-                          >
-                            Reviews (128)
-                          </TabsTrigger>
-                          <TabsTrigger
-                            value="size-chart"
-                            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3"
-                          >
-                            Size Chart
-                          </TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="description" className="pt-8">
-                          <div className="max-w-3xl space-y-4 text-muted-foreground leading-relaxed">
-                            <p>{product.description}</p>
-                            <p>
-                              Made with premium materials and designed for everyday comfort. This {product.name} features
-                              durable stitching, a soft feel, and a modern fit that looks great on everyone.
-                            </p>
-                            <ul className="list-disc pl-5 space-y-1 mt-4">
-                              <li>Premium quality fabric</li>
-                              <li>Durable and long-lasting print</li>
-                              <li>Comfortable fit for all-day wear</li>
-                              <li>Machine washable</li>
-                            </ul>
-                          </div>
-                        </TabsContent>
-                        <TabsContent value="reviews" className="pt-8"> */}
-                    {/* Reviews Tab Content - kept for backward compatibility if user wants inside tabs */}
-                    {/* <div className="space-y-8">
-                            <div className="flex items-center justify-between">
-                              <h3 className="text-xl font-bold">Customer Reviews</h3>
-                              <Button>Write a Review</Button>
-                            </div>
-                            <div className="grid gap-6">
-                              {mockReviews.map((review) => (
-                                <Card key={review.id} className="p-6">
-                                  <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                                        {review.avatar}
-                                      </div>
-                                      <div>
-                                        <p className="font-semibold">{review.name}</p>
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                          <span>{review.date}</span>
-                                          {review.verified && (
-                                            <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                                              <Check className="w-3 h-3" /> Verified Purchase
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="flex">
-                                      {[1, 2, 3, 4, 5].map((star) => (
-                                        <Star
-                                          key={star}
-                                          className={cn(
-                                            "w-4 h-4",
-                                            star <= review.rating ? "fill-amber-400 text-amber-400" : "fill-muted text-muted"
-                                          )}
-                                        />
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <p className="text-muted-foreground">{review.content}</p>
-                                </Card>
-                              ))}
-                            </div>
-                          </div>
-                        </TabsContent> */}
-                    {/* <TabsContent value="size-chart" className="pt-8">
-                          <div className="max-w-2xl border rounded-lg overflow-hidden">
-                            <table className="w-full text-sm">
-                              <thead className="bg-muted">
-                                <tr>
-                                  <th className="px-4 py-3 text-left font-semibold">Size</th>
-                                  <th className="px-4 py-3 text-left font-semibold">Chest</th>
-                                  <th className="px-4 py-3 text-left font-semibold">Length</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y">
-                                {defaultSizeChart.map((row) => (
-                                  <tr key={row.size}>
-                                    <td className="px-4 py-3 font-medium">{row.size}</td>
-                                    <td className="px-4 py-3 text-muted-foreground">{row.chest}</td>
-                                    <td className="px-4 py-3 text-muted-foreground">{row.length}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </TabsContent>
-                      </Tabs>
-                    </div> */}
-                  </main>
-                </div>
-              );
-            }
-            if (section.type === 'product-recommendations') {
-              return (
-                <div key={section.id} className="container mx-auto px-4 pb-16">
-                  {renderRecommendations(section.settings?.heading, section.settings?.subheading)}
-                </div>
-              );
-            }
-            // if (section.type === 'reviews') {
-            //   return (
-            //     <div key={section.id} className="bg-muted/10">
-            //       <div className="container mx-auto px-4">
-            //         <ReviewsSection
-            //           productId={productId || ''}
-            //           heading={section.settings?.heading || "Customer Reviews"}
-            //         />
-            //       </div>
-            //     </div>
-            //   );
-            // }
-            if (section.type === 'footer') {
-              return (
-                <div key={section.id}>
-                  {renderFooter(section)}
-                </div>
-              );
-            }
-
-            // Default handler for other sections (text, image, video, etc)
-            return (
-              <SectionRenderer
-                key={section.id}
-                section={section}
-                products={products}
-                globalStyles={store.builder?.globalStyles}
-                isPreview={false}
-              />
-            );
-          })}
-        </div>
-      ) : (
-        // Default Hardcoded Layout
-        <>
-          {renderHeader()}
-
-          {/* Breadcrumb */}
-          <div className="border-b bg-muted/30">
-            <div className="container mx-auto px-4 py-3">
-              <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Link to={`/store/${store.subdomain}`} className="hover:text-primary transition-colors flex items-center gap-1">
-                  <Home className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Home</span>
-                </Link>
-                <ChevronRight className="h-3.5 w-3.5" />
-                <Link to={`/store/${store.subdomain}#products`} className="hover:text-primary transition-colors">
-                  Products
-                </Link>
-                <ChevronRight className="h-3.5 w-3.5" />
-                <span className="text-foreground font-medium truncate max-w-[200px]">{product.name}</span>
-              </nav>
-            </div>
+            })}
           </div>
+        ) : (
+          // Default Hardcoded Layout
+          <>
+            {/* Breadcrumb */}
+            <div className="border-b bg-muted/30">
+              <div className="container mx-auto px-4 py-3">
+                <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Link to={`/store/${store.subdomain}`} className="hover:text-primary transition-colors flex items-center gap-1">
+                    <Home className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Home</span>
+                  </Link>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                  <Link to={`/store/${store.subdomain}#products`} className="hover:text-primary transition-colors">
+                    Products
+                  </Link>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                  <span className="text-foreground font-medium truncate max-w-[200px]">{product.name}</span>
+                </nav>
+              </div>
+            </div>
 
-          <main className="container mx-auto px-4 py-8 lg:py-12">
-            {renderProductDetails()}
-
-            {/* Tabs */}
-            {/* <div className="mt-16">
-              <Tabs defaultValue="description" className="w-full">
-                <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
-                  <TabsTrigger
-                    value="description"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3"
-                  >
-                    Description
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="reviews"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3"
-                  >
-                    Reviews (128)
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="size-chart"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3"
-                  >
-                    Size Chart
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="description" className="pt-8">
-                  <div className="max-w-3xl space-y-4 text-muted-foreground leading-relaxed">
-                    <p>{product.description}</p>
-                    <p>
-                      Made with premium materials and designed for everyday comfort. This {product.name} features
-                      durable stitching, a soft feel, and a modern fit that looks great on everyone.
-                    </p>
-                    <ul className="list-disc pl-5 space-y-1 mt-4">
-                      <li>Premium quality fabric</li>
-                      <li>Durable and long-lasting print</li>
-                      <li>Comfortable fit for all-day wear</li>
-                      <li>Machine washable</li>
-                    </ul>
-                  </div>
-                </TabsContent>
-                <TabsContent value="reviews" className="pt-8">
-                  <div className="space-y-8">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xl font-bold">Customer Reviews</h3>
-                      <Button>Write a Review</Button>
-                    </div>
-                    <div className="grid gap-6">
-                      {mockReviews.map((review) => (
-                        <Card key={review.id} className="p-6">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                                {review.avatar}
-                              </div>
-                              <div>
-                                <p className="font-semibold">{review.name}</p>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <span>{review.date}</span>
-                                  {review.verified && (
-                                    <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                                      <Check className="w-3 h-3" /> Verified Purchase
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={cn(
-                                    "w-4 h-4",
-                                    star <= review.rating ? "fill-amber-400 text-amber-400" : "fill-muted text-muted"
-                                  )}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <p className="text-muted-foreground">{review.content}</p>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="size-chart" className="pt-8">
-                  <div className="max-w-2xl border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-semibold">Size</th>
-                          <th className="px-4 py-3 text-left font-semibold">Chest</th>
-                          <th className="px-4 py-3 text-left font-semibold">Length</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {defaultSizeChart.map((row) => (
-                          <tr key={row.size}>
-                            <td className="px-4 py-3 font-medium">{row.size}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{row.chest}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{row.length}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div> */}
-
-            {renderRecommendations()}
-          </main>
-
-          {renderFooter()}
-        </>
-      )}
+            <main className="container mx-auto px-4 py-8 lg:py-12">
+              {renderProductDetails()}
+              {renderRecommendations()}
+            </main>
+          </>
+        )}
+      </div>
 
       {/* Sticky Add to Cart Bar */}
       <div
@@ -1621,16 +1383,7 @@ const StoreProductPage = () => {
           </div>
         </div>
       </div>
-
-      <CartDrawer
-        open={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        cart={cart}
-        onUpdateQuantity={updateQuantity}
-        onRemove={removeFromCart}
-        onCheckout={handleCheckout}
-      />
-    </div>
+    </StoreLayout>
   );
 };
 

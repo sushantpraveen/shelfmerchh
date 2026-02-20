@@ -25,10 +25,10 @@ exports.protect = async (req, res, next) => {
     try {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
+
       // Get user from token
       const user = await User.findById(decoded.id).select('-password');
-      
+
       if (!user) {
         return res.status(401).json({
           success: false,
@@ -139,4 +139,40 @@ exports.adminOnly = (req, res, next) => {
   next();
 };
 
+// Basic check if token exists and is valid (used by store-scoped routes)
+exports.verifyStoreToken = (req, res, next) => {
+  const authHeader = req.header('Authorization');
+  let token = null;
 
+  if (authHeader) {
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.replace('Bearer ', '');
+    } else {
+      token = authHeader;
+    }
+  }
+
+  if (!token) {
+    console.warn(`[Auth] No token found in Authorization header for ${req.method} ${req.originalUrl}`);
+    return res.status(401).json({ success: false, message: 'No auth token found' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // payload structure: { customer: { id, storeId } }
+    if (!decoded.customer || !decoded.customer.id) {
+      console.error('[Auth] Token verified but missing customer info:', decoded);
+      return res.status(401).json({ success: false, message: 'Invalid token payload' });
+    }
+
+    req.customer = decoded;
+    next();
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      console.warn(`[Auth] Token expired for ${req.method} ${req.originalUrl}`);
+      return res.status(401).json({ success: false, message: 'Token expired', code: 'TOKEN_EXPIRED' });
+    }
+    console.error(`[Auth] Token verification failed for ${req.method} ${req.originalUrl}:`, err.message);
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+};

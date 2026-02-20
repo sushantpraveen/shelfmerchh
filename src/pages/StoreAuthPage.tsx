@@ -11,6 +11,7 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import googleLogo from '@/assets/google-logo-new.png';
 import { API_BASE_URL } from '@/config';
+import StoreLayout from '@/components/storefront/StoreLayout';
 
 type AuthStep = 'IDENTIFIER' | 'VERIFY' | 'NAME';
 
@@ -205,154 +206,156 @@ const StoreAuthPage = () => {
     const primaryColor = '#16a34a'; // Green
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
-            <div className="w-full max-w-sm">
-                <div className="text-center mb-10">
-                    <Link to={buildStorePath('/', subdomain || undefined)}>
-                        <h1 className="text-3xl font-bold mb-2 hover:text-green-600 transition-colors cursor-pointer">{store.storeName}</h1>
-                    </Link>
-                    <p className="text-muted-foreground">
-                        {step === 'IDENTIFIER' ? (redirectPath === 'checkout' ? 'Sign in to continue shopping' : 'Sign in to your account') :
-                            step === 'VERIFY' ? `Enter the code sent to ${identifier}` : 'Complete your profile'}
-                    </p>
-                </div>
-
-                <div className="bg-card rounded-3xl shadow-2xl p-8 border border-gray-100">
-                    <h2 className="text-2xl font-bold mb-8 text-gray-900 tracking-tight">
-                        {step === 'IDENTIFIER' ? 'Sign-In or Create' : step === 'VERIFY' ? 'Verify Code' : 'Welcome!'}
-                    </h2>
-
-                    <div className="space-y-6">
-                        {step === 'IDENTIFIER' && (
-                            <form onSubmit={handleIdentifierSubmit} className="space-y-6">
-                                <div className="space-y-2">
-                                    <Label htmlFor="identifier" className="text-sm font-semibold text-gray-600 ml-1">Email or phone number</Label>
-                                    <Input
-                                        id="identifier"
-                                        value={identifier}
-                                        onChange={(e) => setIdentifier(e.target.value)}
-                                        className="h-12 rounded-xl border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                                        placeholder="Enter email or phone"
-                                        required
-                                    />
-                                </div>
-                                <Button
-                                    type="submit"
-                                    className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg shadow-green-600/20 transition-all"
-                                    disabled={isLoadingAuth}
-                                >
-                                    {isLoadingAuth ? <Loader2 className="animate-spin h-5 w-5" /> : 'Continue'}
-                                </Button>
-
-                                <div className="relative my-4">
-                                    <div className="absolute inset-0 flex items-center">
-                                        <span className="w-full border-t border-gray-100"></span>
-                                    </div>
-                                    <div className="relative flex justify-center text-xs uppercase">
-                                        <span className="bg-white px-2 text-gray-400 font-medium">Or</span>
-                                    </div>
-                                </div>
-
-                                <Button
-                                    variant="outline"
-                                    type="button"
-                                    className="w-full h-12 border-gray-200 rounded-xl hover:bg-gray-50 flex items-center justify-center gap-3 transition-all"
-                                    onClick={handleGoogleSignIn}
-                                    disabled={isLoadingAuth}
-                                >
-                                    <img src={googleLogo} alt="Google" className="h-5 w-5" />
-                                    <span className="font-bold text-gray-700">Continue with Google</span>
-                                </Button>
-                            </form>
-                        )}
-
-                        {step === 'VERIFY' && (
-                            <form onSubmit={handleVerifySubmit} className="space-y-6">
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center px-1">
-                                        <Label htmlFor="otp-0" className="text-sm font-semibold text-gray-600">Verification Code</Label>
-                                        <button
-                                            type="button"
-                                            onClick={() => setStep('IDENTIFIER')}
-                                            className="text-xs font-bold text-green-600 hover:underline"
-                                        >
-                                            Change {entryType === 'email' ? 'Email' : 'Phone'}
-                                        </button>
-                                    </div>
-                                    <div className="flex gap-2 justify-between">
-                                        {otp.map((digit, i) => (
-                                            <Input
-                                                key={i}
-                                                id={`otp-${i}`}
-                                                maxLength={1}
-                                                value={digit}
-                                                onChange={(e) => handleOtpChange(i, e.target.value)}
-                                                onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                                                className="text-center w-full h-12 text-lg font-bold rounded-xl border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                                <Button
-                                    type="submit"
-                                    className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg shadow-green-600/20 transition-all"
-                                    disabled={isLoadingAuth}
-                                >
-                                    {isLoadingAuth ? <Loader2 className="animate-spin h-5 w-5" /> : 'Verify'}
-                                </Button>
-                                <div className="text-center">
-                                    <button
-                                        type="button"
-                                        onClick={handleIdentifierSubmit}
-                                        className="text-sm font-medium text-green-600 hover:underline"
-                                        disabled={isLoadingAuth}
-                                    >
-                                        Resend Code
-                                    </button>
-                                </div>
-                            </form>
-                        )}
-
-                        {step === 'NAME' && (
-                            <form onSubmit={handleNameSubmit} className="space-y-6">
-                                <div className="space-y-2">
-                                    <Label htmlFor="name" className="text-sm font-semibold text-gray-600 ml-1">Your Name</Label>
-                                    <Input
-                                        id="name"
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        className="h-12 rounded-xl border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                                        placeholder="Enter your full name"
-                                        required
-                                    />
-                                </div>
-                                <Button
-                                    type="submit"
-                                    className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg shadow-green-600/20 transition-all"
-                                    disabled={isLoadingAuth}
-                                >
-                                    {isLoadingAuth ? <Loader2 className="animate-spin h-5 w-5" /> : 'Complete Setup'}
-                                </Button>
-                            </form>
-                        )}
+        <StoreLayout store={store}>
+            <div className="min-h-[calc(100vh-100px)] flex items-center justify-center bg-muted/30 px-4 py-12">
+                <div className="w-full max-w-sm">
+                    <div className="text-center mb-10">
+                        <Link to={buildStorePath('/', subdomain || undefined)}>
+                            <h1 className="text-3xl font-bold mb-2 hover:text-green-600 transition-colors cursor-pointer">{store.storeName}</h1>
+                        </Link>
+                        <p className="text-muted-foreground">
+                            {step === 'IDENTIFIER' ? (redirectPath === 'checkout' ? 'Sign in to continue shopping' : 'Sign in to your account') :
+                                step === 'VERIFY' ? `Enter the code sent to ${identifier}` : 'Complete your profile'}
+                        </p>
                     </div>
 
-                    <p className="mt-8 text-[11px] text-gray-400 text-center leading-relaxed font-medium">
-                        By continuing, you agree to comply with {store.storeName}'s terms and conditions.
-                    </p>
-                </div>
+                    <div className="bg-card rounded-3xl shadow-2xl p-8 border border-gray-100">
+                        <h2 className="text-2xl font-bold mb-8 text-gray-900 tracking-tight">
+                            {step === 'IDENTIFIER' ? 'Sign-In or Create' : step === 'VERIFY' ? 'Verify Code' : 'Welcome!'}
+                        </h2>
 
-                <div className="text-center mt-8">
-                    <Button
-                        variant="link"
-                        onClick={() => navigate(buildStorePath('/', subdomain))}
-                        className="text-gray-500 hover:text-green-600 font-semibold"
-                    >
-                        Back to Store
-                    </Button>
+                        <div className="space-y-6">
+                            {step === 'IDENTIFIER' && (
+                                <form onSubmit={handleIdentifierSubmit} className="space-y-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="identifier" className="text-sm font-semibold text-gray-600 ml-1">Email or phone number</Label>
+                                        <Input
+                                            id="identifier"
+                                            value={identifier}
+                                            onChange={(e) => setIdentifier(e.target.value)}
+                                            className="h-12 rounded-xl border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                                            placeholder="Enter email or phone"
+                                            required
+                                        />
+                                    </div>
+                                    <Button
+                                        type="submit"
+                                        className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg shadow-green-600/20 transition-all"
+                                        disabled={isLoadingAuth}
+                                    >
+                                        {isLoadingAuth ? <Loader2 className="animate-spin h-5 w-5" /> : 'Continue'}
+                                    </Button>
+
+                                    <div className="relative my-4">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <span className="w-full border-t border-gray-100"></span>
+                                        </div>
+                                        <div className="relative flex justify-center text-xs uppercase">
+                                            <span className="bg-white px-2 text-gray-400 font-medium">Or</span>
+                                        </div>
+                                    </div>
+
+                                    <Button
+                                        variant="outline"
+                                        type="button"
+                                        className="w-full h-12 border-gray-200 rounded-xl hover:bg-gray-50 flex items-center justify-center gap-3 transition-all"
+                                        onClick={handleGoogleSignIn}
+                                        disabled={isLoadingAuth}
+                                    >
+                                        <img src={googleLogo} alt="Google" className="h-5 w-5" />
+                                        <span className="font-bold text-gray-700">Continue with Google</span>
+                                    </Button>
+                                </form>
+                            )}
+
+                            {step === 'VERIFY' && (
+                                <form onSubmit={handleVerifySubmit} className="space-y-6">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center px-1">
+                                            <Label htmlFor="otp-0" className="text-sm font-semibold text-gray-600">Verification Code</Label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setStep('IDENTIFIER')}
+                                                className="text-xs font-bold text-green-600 hover:underline"
+                                            >
+                                                Change {entryType === 'email' ? 'Email' : 'Phone'}
+                                            </button>
+                                        </div>
+                                        <div className="flex gap-2 justify-between">
+                                            {otp.map((digit, i) => (
+                                                <Input
+                                                    key={i}
+                                                    id={`otp-${i}`}
+                                                    maxLength={1}
+                                                    value={digit}
+                                                    onChange={(e) => handleOtpChange(i, e.target.value)}
+                                                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                                                    className="text-center w-full h-12 text-lg font-bold rounded-xl border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="submit"
+                                        className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg shadow-green-600/20 transition-all"
+                                        disabled={isLoadingAuth}
+                                    >
+                                        {isLoadingAuth ? <Loader2 className="animate-spin h-5 w-5" /> : 'Verify'}
+                                    </Button>
+                                    <div className="text-center">
+                                        <button
+                                            type="button"
+                                            onClick={handleIdentifierSubmit}
+                                            className="text-sm font-medium text-green-600 hover:underline"
+                                            disabled={isLoadingAuth}
+                                        >
+                                            Resend Code
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {step === 'NAME' && (
+                                <form onSubmit={handleNameSubmit} className="space-y-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="name" className="text-sm font-semibold text-gray-600 ml-1">Your Name</Label>
+                                        <Input
+                                            id="name"
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value)}
+                                            className="h-12 rounded-xl border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                                            placeholder="Enter your full name"
+                                            required
+                                        />
+                                    </div>
+                                    <Button
+                                        type="submit"
+                                        className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg shadow-green-600/20 transition-all"
+                                        disabled={isLoadingAuth}
+                                    >
+                                        {isLoadingAuth ? <Loader2 className="animate-spin h-5 w-5" /> : 'Complete Setup'}
+                                    </Button>
+                                </form>
+                            )}
+                        </div>
+
+                        <p className="mt-8 text-[11px] text-gray-400 text-center leading-relaxed font-medium">
+                            By continuing, you agree to comply with {store.storeName}'s terms and conditions.
+                        </p>
+                    </div>
+
+                    <div className="text-center mt-8">
+                        <Button
+                            variant="link"
+                            onClick={() => navigate(buildStorePath('/', subdomain))}
+                            className="text-gray-500 hover:text-green-600 font-semibold"
+                        >
+                            Back to Store
+                        </Button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </StoreLayout>
     );
 };
 
