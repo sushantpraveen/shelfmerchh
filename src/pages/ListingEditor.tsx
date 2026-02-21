@@ -326,15 +326,18 @@ const ListingEditor = () => {
         defaultRetail = preservedRetailPrice;
         console.log('[ListingEditor] Preserving user-entered retailPrice:', preservedRetailPrice);
       } else {
-        // No user entry yet, use default
-        if (Number.isFinite(v.price as number)) {
-          defaultRetail = v.price as number;
-        } else if (Number.isFinite(state?.baseSellingPrice as number)) {
-          defaultRetail = state!.baseSellingPrice as number;
-        } else if (cost > 0) {
-          defaultRetail = parseFloat((cost / 0.6).toFixed(2));
-        }
+        // Default retail price = base price (production cost)
+        defaultRetail = cost;
       }
+      //   // No user entry yet, use default
+      //   if (Number.isFinite(v.price as number)) {
+      //     defaultRetail = v.price as number;
+      //   } else if (Number.isFinite(state?.baseSellingPrice as number)) {
+      //     defaultRetail = state!.baseSellingPrice as number;
+      //   } else if (cost > 0) {
+      //     defaultRetail = parseFloat((cost / 0.6).toFixed(2));
+      //   }
+      // }
 
       const row: VariantRow = {
         // Prefer mapped?.id (catalogProductVariantId from cost map) over v.id
