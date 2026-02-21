@@ -1241,6 +1241,7 @@ export const authApi = {
         name: string;
         email: string;
         phone?: string;
+        phoneNumber?: string;
         role: string;
         isEmailVerified?: boolean;
         isPhoneVerified?: boolean;
@@ -1282,6 +1283,7 @@ export const authApi = {
         name: string;
         email: string;
         phone?: string;
+        phoneNumber?: string;
         role: string;
         isEmailVerified?: boolean;
         isPhoneVerified?: boolean;
@@ -1472,6 +1474,7 @@ export const authApi = {
         name: string,
         email: string,
         phone?: string,
+        phoneNumber?: string,
         upiId?: string,
         createdAt: string,
         lastLogin?: string,

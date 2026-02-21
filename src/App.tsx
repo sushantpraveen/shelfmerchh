@@ -77,6 +77,7 @@ import ContactUsPage from "./pages/rem-pgs/support/ContactUsPage";
 
 //DEVELOPERS
 import Causes from "./pages/Causes";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 // Root route component that conditionally renders Index or StoreRoutes
 // On subdomains, StoreRoutes handles all routing including root path
@@ -95,6 +96,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <ScrollToTop />
         <div className="min-h-screen w-full overflow-x-hidden">
           <AuthProvider>
             <StoreProvider>

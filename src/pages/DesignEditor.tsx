@@ -2324,12 +2324,12 @@ const DesignEditor: React.FC = () => {
 
           // Show toast with image
           // Show toast with image and link
-          toast.custom((t) => (
-            <div className="flex items-center gap-3 bg-background border border-border rounded-lg shadow-lg p-3 w-full max-w-sm pointer-events-auto">
-              <div className="h-12 w-12 rounded overflow-hidden flex-shrink-0 bg-muted border border-border">
-                <img src={previewUrl} alt="Saved mockup" className="h-full w-full object-cover" />
-              </div>
-              <div className="flex-1 min-w-0">
+          // toast.custom((t) => (
+          //   <div className="flex items-center gap-3 bg-background border border-border rounded-lg shadow-lg p-3 w-full max-w-sm pointer-events-auto">
+          //     <div className="h-12 w-12 rounded overflow-hidden flex-shrink-0 bg-muted border border-border">
+          //       <img src={previewUrl} alt="Saved mockup" className="h-full w-full object-cover" />
+          //     </div>
+              {/* <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">Mockup Auto-Saved</p>
                 <div className="flex items-center gap-2">
                   <p className="text-xs text-muted-foreground truncate capitalize flex-1">{currentView} view updated</p>
@@ -2343,9 +2343,9 @@ const DesignEditor: React.FC = () => {
                     View <ArrowRight className="w-3 h-3" />
                   </a>
                 </div>
-              </div>
-            </div>
-          ), { duration: 3000 });
+              </div> */}
+          //   </div>
+          // ), { duration: 3000 });
 
           // Clear dirty flag for this view
           setDirtyViewsForDesign(prev => {
