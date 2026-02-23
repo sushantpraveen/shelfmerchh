@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,7 @@ type AuthStep =
 
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, loginWithOtp, signupComplete, refreshUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -47,7 +48,10 @@ const Auth = () => {
           await refreshUser(); // Load user profile
 
           toast.success('Signed in with Google successfully!');
-          navigate('/dashboard');
+          const sessionFrom = sessionStorage.getItem('post_auth_redirect');
+          const from = sessionFrom || location.state?.from?.pathname || '/dashboard';
+          if (sessionFrom) sessionStorage.removeItem('post_auth_redirect');
+          navigate(from);
         } catch (err) {
           console.error('OAuth token processing error:', err);
           toast.error('Failed to complete sign-in. Please try again.');
@@ -159,7 +163,10 @@ const Auth = () => {
       try {
         await login(identifier, password);
         toast.success('Welcome back!');
-        navigate('/dashboard');
+        const sessionFrom = sessionStorage.getItem('post_auth_redirect');
+        const from = sessionFrom || location.state?.from?.pathname || '/dashboard';
+        if (sessionFrom) sessionStorage.removeItem('post_auth_redirect');
+        navigate(from);
       } catch (err: any) {
         toast.error(err.message || 'Invalid password');
       } finally { setIsLoading(false); }
@@ -184,7 +191,10 @@ const Auth = () => {
 
         if (exists) {
           toast.success('Welcome back!');
-          navigate('/dashboard');
+          const sessionFrom = sessionStorage.getItem('post_auth_redirect');
+          const from = sessionFrom || location.state?.from?.pathname || '/dashboard';
+          if (sessionFrom) sessionStorage.removeItem('post_auth_redirect');
+          navigate(from);
         } else {
           // New user - move to NAME step to complete profile
           setStep('NAME');
@@ -261,7 +271,10 @@ const Auth = () => {
     try {
       await signupComplete(name);
       toast.success('Account successfully created');
-      navigate('/dashboard');
+      const sessionFrom = sessionStorage.getItem('post_auth_redirect');
+      const from = sessionFrom || location.state?.from?.pathname || '/dashboard';
+      if (sessionFrom) sessionStorage.removeItem('post_auth_redirect');
+      navigate(from);
     } catch (err: any) {
       toast.error(err.message || 'Error creating account');
     } finally { setIsLoading(false); }
@@ -353,6 +366,10 @@ const Auth = () => {
                     variant="outline"
                     className="w-full h-12 border-gray-200 rounded-xl hover:bg-gray-50 flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
                     onClick={() => {
+                      // Save redirect path for Google OAuth callback
+                      const from = location.state?.from?.pathname;
+                      if (from) sessionStorage.setItem('post_auth_redirect', from);
+
                       // Construct the Google OAuth initiation URL
                       const googleAuthUrl = `${RAW_API_URL}/api/auth/google`;
                       console.log('📡 Redirecting to Google Auth:', googleAuthUrl);

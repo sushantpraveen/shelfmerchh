@@ -30,7 +30,7 @@ const sendStoreTokenResponse = async (user, statusCode, res) => {
         const refreshToken = generateStoreRefreshToken(userId);
 
         // Save refresh token to database if supported by model,
-        // otherwise just send it. Our StoreUser model doesn't have it yet, let's add it if needed.
+        // otherwise just send it.
         // For now we'll skip saving to DB to keep it simple, or we can add it to schema.
 
         // Update last login
