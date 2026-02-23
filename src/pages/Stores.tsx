@@ -9,9 +9,6 @@ import ManageStoreDialog from '@/components/ManageStoreDialog';
 import { storeApi, storeProductsApi } from '@/lib/api';
 import type { Store as StoreType } from '@/types';
 import { toast } from 'sonner';
-import logo from '@/assets/logo.webp';
-import { generateDefaultStoreData } from '@/utils/storeNameGenerator';
-
 import {
   Package,
   Store,
@@ -30,19 +27,8 @@ import {
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Trash2 } from 'lucide-react';
 
 const ChannelButton = ({ name, icon, isNew }: { name: string; icon?: React.ReactNode; isNew?: boolean }) => (
   <Button variant="outline" className="h-14 justify-start px-4 gap-3 relative hover:border-primary/50 hover:bg-muted/50 transition-all group">
@@ -70,17 +56,6 @@ const Stores = () => {
   const [newStoreName, setNewStoreName] = useState('');
   const [newStoreDescription, setNewStoreDescription] = useState('');
   const [isCreatingStore, setIsCreatingStore] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [storeToDelete, setStoreToDelete] = useState<StoreType | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // Pre-populate store name when dialog opens
-  useEffect(() => {
-    if (createStoreDialogOpen && !newStoreName) {
-      const defaultData = generateDefaultStoreData();
-      setNewStoreName(defaultData.name);
-    }
-  }, [createStoreDialogOpen]);
 
   useEffect(() => {
     const fetchStores = async () => {
@@ -105,9 +80,9 @@ const Stores = () => {
     setIsCreatingInternal(true);
     try {
       // 1. Create the store
-      const defaultData = generateDefaultStoreData();
+      const storeName = `Store ${new Date().toLocaleDateString().replace(/\//g, '-')}`;
       const createResp = await storeApi.create({
-        name: defaultData.name,
+        name: storeName,
         description: 'My ShelfMerch Pop-Up Store',
       });
 
@@ -162,11 +137,7 @@ const Stores = () => {
 
       } else {
         // Just redirect to dashboard if no product data
-        if (state?.fromDesigner?.pathname) {
-          navigate(state.fromDesigner.pathname);
-        } else {
-          navigate('/dashboard');
-        }
+        navigate('/dashboard');
       }
 
     } catch (error: any) {
@@ -200,20 +171,11 @@ const Stores = () => {
 
       const newStore = createResp.data;
       toast.success('Store created successfully!');
-
+      
       // Refresh stores list
       const response = await storeApi.listMyStores();
       if (response.success) {
         setStores(response.data || []);
-      }
-
-      // Check if we need to redirect back to designer
-      if (state?.fromDesigner?.pathname) {
-        toast.success(`Redirecting back to designer...`);
-        // Small delay to let the toast be seen
-        setTimeout(() => {
-          navigate(state.fromDesigner.pathname);
-        }, 1500);
       }
 
       // Reset form and close dialog
@@ -228,53 +190,14 @@ const Stores = () => {
     }
   };
 
-  const handleDeleteClick = (store: StoreType) => {
-    console.log('handleDeleteClick store:', store);
-    setStoreToDelete(store);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!storeToDelete) return;
-
-    setIsDeleting(true);
-    try {
-      if (!storeToDelete.id) {
-        console.error('storeToDelete has no ID:', storeToDelete);
-        toast.error('Error: Store ID is missing');
-        return;
-      }
-      console.log('Deleting store with ID:', storeToDelete.id);
-      const response = await storeApi.delete(storeToDelete.id);
-
-      if (response.success) {
-        // Remove the deleted store from the list
-        setStores((prevStores) => prevStores.filter((s) => s.id !== storeToDelete.id));
-        toast.success('Store deleted successfully');
-        setDeleteDialogOpen(false);
-        setStoreToDelete(null);
-      } else {
-        throw new Error(response.message || 'Failed to delete store');
-      }
-    } catch (error: any) {
-      console.error('Error deleting store:', error);
-      toast.error(error.message || 'Failed to delete store');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDeleteCancel = () => {
-    setDeleteDialogOpen(false);
-    setStoreToDelete(null);
-  };
-
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <aside className="hidden lg:block w-64 border-r bg-muted/10 p-6 space-y-8 sticky top-0 h-screen overflow-y-auto">
         <Link to="/" className="flex items-center space-x-2">
-          <img src={logo} alt="ShelfMerch" className="h-8 w-auto" />
+          <span className="font-heading text-xl font-bold text-foreground">
+            Shelf<span className="text-primary">Merch</span>
+          </span>
         </Link>
 
         <nav className="space-y-2">
@@ -344,7 +267,7 @@ const Stores = () => {
                   Create New Store
                 </Button>
               </div>
-
+              
               {stores.length === 0 ? (
                 <Card className="p-12 text-center">
                   <Store className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -358,159 +281,56 @@ const Stores = () => {
                   </Button>
                 </Card>
               ) : (
-                <Card className="overflow-hidden">
-                  <div className="overflow-x-auto">
-                    {/* Desktop Table View */}
-                    <table className="w-full hidden md:table">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="px-6 py-4 text-left text-sm font-semibold">Store Name</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold">Status</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold">Builder</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold">Last Published</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {stores.map((store) => (
-                          <tr key={store.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-6 py-4">
-                              <div>
-                                <div className="font-semibold text-foreground">{store.storeName}</div>
-                                <div className="text-sm text-muted-foreground">{store.subdomain}.shelfmerch.com</div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-                                Active
-                              </Badge>
-                            </td>
-                            <td className="px-6 py-4">
-                              {store.useBuilder ? (
-                                <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-green-100 text-green-700 border-green-200 w-fit">
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  Builder
-                                </Badge>
-                              ) : (
-                                <span className="text-sm text-muted-foreground">-</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-muted-foreground">
-                              {store.builderLastPublishedAt
-                                ? new Date(store.builderLastPublishedAt).toLocaleDateString('en-GB', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric'
-                                })
-                                : '-'}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8"
-                                  asChild
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <a href={getStoreUrl(store.subdomain)} target="_blank" rel="noreferrer">
-                                    <ExternalLink className="w-4 h-4 mr-2" />
-                                    Visit Store
-                                  </a>
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/stores/${store.id}/builder`);
-                                  }}
-                                >
-                                  <Paintbrush className="w-4 h-4 mr-2" />
-                                  Customize Storefront
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteClick(store);
-                                  }}
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Delete Store
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-
-                    {/* Mobile Stacked View */}
-                    <div className="md:hidden divide-y">
-                      {stores.map((store) => (
-                        <div key={store.id} className="p-4 space-y-4 hover:bg-muted/30 transition-colors">
-                          <div>
-                            <div className="font-semibold text-foreground mb-1">{store.storeName}</div>
-                            <div className="text-sm text-muted-foreground">{store.subdomain}.shelfmerch.com</div>
-                          </div>
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <Badge className="bg-green-200 text-green-700 border-green-200 hover:bg-green-200">
-                              Active
-                            </Badge>
-                            {store.useBuilder && (
-                              <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-green-100 text-green-700 border-green-200">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Builder
-                              </Badge>
-                            )}
-                            {store.builderLastPublishedAt && (
-                              <span className="text-sm text-muted-foreground">
-                                Last published: {new Date(store.builderLastPublishedAt).toLocaleDateString('en-GB', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric'
-                                })}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-2 pt-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full"
-                              asChild
-                            >
-                              <a href={getStoreUrl(store.subdomain)} target="_blank" rel="noreferrer">
-                                <ExternalLink className="w-4 h-4 mr-2" />
-                                Visit Store
-                              </a>
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                              onClick={() => navigate(`/stores/${store.id}/builder`)}
-                            >
-                              <Paintbrush className="w-4 h-4 mr-2" />
-                              Customize Storefront
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDeleteClick(store)}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete Store
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                  {stores.map((store) => (
+                  <Card key={store.id} className="p-6 flex flex-col justify-between gap-4 border-l-4 border-l-primary">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-lg">{store.storeName}</h3>
+                        <p className="text-sm text-muted-foreground">{store.subdomain}.shelfmerch.com</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {store.useBuilder && (
+                          <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-green-100 text-green-700 border-green-200">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Builder
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs">Active</Badge>
+                      </div>
                     </div>
-                  </div>
-                </Card>
+
+                    {store.builderLastPublishedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Last published: {new Date(store.builderLastPublishedAt).toLocaleDateString()}
+                      </p>
+                    )}
+
+                    <div className="flex flex-col gap-2 pt-2">
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="flex-1" asChild>
+                          <a href={getStoreUrl(store.subdomain)} target="_blank" rel="noreferrer">
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            Visit Store
+                          </a>
+                        </Button>
+                        <Button variant="default" size="sm" className="flex-1" onClick={() => toast.info('Dashboard coming soon')}>
+                          Dashboard
+                        </Button>
+                      </div>
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="w-full"
+                        onClick={() => navigate(`/stores/${store.id}/builder`)}
+                      >
+                        <Paintbrush className="w-4 h-4 mr-2" />
+                        Customize Storefront
+                      </Button>
+                    </div>
+                  </Card>
+                  ))}
+                </div>
               )}
             </div>
           )}
@@ -664,10 +484,7 @@ const Stores = () => {
                 disabled={isCreatingStore}
               />
               <p className="text-xs text-muted-foreground">
-                This will be the display name of your store. Your subdomain will be:
-                <span className="font-mono font-bold text-primary ml-1">
-                  {newStoreName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'your-store'}.shelfmerch.com
-                </span>
+                This will be the display name of your store
               </p>
             </div>
             <div className="space-y-2">
@@ -714,37 +531,6 @@ const Stores = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Store Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Store</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this store? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleDeleteCancel} disabled={isDeleting}>
-              No, go back
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Yes'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };

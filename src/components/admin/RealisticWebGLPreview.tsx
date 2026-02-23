@@ -165,6 +165,7 @@ export const RealisticWebGLPreview: React.FC<RealisticWebGLPreviewProps> = ({
     placeholderContainer: Container | null;
     pxPerInch: number;
     canvasElementSprites: Map<string, Sprite | Text>; // Track canvas element sprites by element ID
+    canvasElementMasks: Map<string, Graphics>; // GHOSTING FIX: reuse masks per element
   }>({
     garmentSprite: null,
     designSprite: null,
@@ -177,6 +178,7 @@ export const RealisticWebGLPreview: React.FC<RealisticWebGLPreviewProps> = ({
     placeholderContainer: null,
     pxPerInch: 1,
     canvasElementSprites: new Map(),
+    canvasElementMasks: new Map(),
   });
 
   // Debug logging flag (set to true to enable)
@@ -296,6 +298,47 @@ export const RealisticWebGLPreview: React.FC<RealisticWebGLPreviewProps> = ({
       }
     };
   }, []);
+
+
+  // Instrumentation for debugging text ghosting / duplicate canvases
+  useEffect(() => {
+    if (!appReady || !appRef.current || !containerRef.current) return;
+
+    const intervalId = setInterval(() => {
+      const canvases = containerRef.current?.querySelectorAll('canvas') || [];
+      const dpr = window.devicePixelRatio;
+
+      let placeholderSprites = 0;
+      let canvasSprites = 0;
+      let textSprites = 0;
+
+      if (sceneRef.current.placeholderDesignLayer) {
+        placeholderSprites = sceneRef.current.placeholderDesignLayer.children.length;
+      }
+      if (sceneRef.current.canvasElementsLayer) {
+        sceneRef.current.canvasElementsLayer.children.forEach(child => {
+          canvasSprites++;
+          if ((child as any).text !== undefined) textSprites++;
+        });
+      }
+
+      console.log('[INSTRUMENTATION RealisticWebGLPreview]', {
+        canvasElementsCount: canvases.length,
+        dpr,
+        appScreen: appRef.current?.screen,
+        appViewWidth: appRef.current?.canvas?.width,
+        appViewHeight: appRef.current?.canvas?.height,
+        cssWidth: appRef.current?.canvas?.style?.width,
+        cssHeight: appRef.current?.canvas?.style?.height,
+        placeholderDesignLayerCount: placeholderSprites,
+        canvasElementsLayerCount: canvasSprites,
+        textSpriteCount: textSprites,
+        previewMode
+      });
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [appReady, previewMode]);
 
   // Load garment (mockup) and rebuild base scene
   useEffect(() => {
@@ -1506,9 +1549,16 @@ export const RealisticWebGLPreview: React.FC<RealisticWebGLPreviewProps> = ({
             const relativeRot = elementRot - sourceRot;
             targetRot = targetPhRot + relativeRot;
 
-            // Apply Masking
-            // Create mask matching Target Placeholder
-            const mask = new Graphics();
+            // Apply Masking — GHOSTING FIX: reuse mask per element to prevent accumulation
+            const maskMap = sceneRef.current.canvasElementMasks;
+            let mask = maskMap.get(element.id);
+            if (mask) {
+              // Reuse existing mask: clear and redraw
+              mask.clear();
+            } else {
+              mask = new Graphics();
+              maskMap.set(element.id, mask);
+            }
             const isPolygon = targetPh.shapeType === 'polygon' && targetPh.polygonPoints && targetPh.polygonPoints.length >= 3;
 
             if (isPolygon && targetPh.polygonPoints) {
@@ -1527,15 +1577,16 @@ export const RealisticWebGLPreview: React.FC<RealisticWebGLPreviewProps> = ({
               mask.fill({ color: 0xffffff });
             }
 
-            // Remove any old mask
-            if (sprite.mask) {
+            // Remove old mask from display if not already parented
+            if (sprite.mask && sprite.mask !== mask) {
               const oldMask = sprite.mask as Graphics;
               sprite.mask = null;
               if (oldMask.parent) oldMask.parent.removeChild(oldMask);
               oldMask.destroy();
+              maskMap.delete(element.id);
             }
 
-            container.addChild(mask);
+            if (!mask.parent) container.addChild(mask);
             sprite.mask = mask;
           }
 
@@ -1564,9 +1615,16 @@ export const RealisticWebGLPreview: React.FC<RealisticWebGLPreviewProps> = ({
               : (element.opacity !== undefined ? element.opacity : 1);
           }
 
-          // Apply displacement
+          // GHOSTING FIX: Clear filters before reapplying to prevent stacking
+          sprite.filters = null;
           if (sceneRef.current.displacementFilter) {
             sprite.filters = [sceneRef.current.displacementFilter];
+          }
+
+          // GHOSTING FIX: Snap Text to integer pixels to avoid subpixel blur
+          if (element.type === 'text') {
+            sprite.x = Math.round(sprite.x);
+            sprite.y = Math.round(sprite.y);
           }
 
           // Ensure correct Z-index

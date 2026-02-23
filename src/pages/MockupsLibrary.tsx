@@ -1868,23 +1868,15 @@ const MockupsLibrary = () => {
         setSavingMockups(prev => ({ ...prev, [mockupId]: true }));
 
         try {
-            const mockup = filteredMockups.find((m: any) => m.id === mockupId);
-            const viewKey = (mockup?.viewKey || 'front').toLowerCase();
-            const colorKey = currentPreviewColor?.toLowerCase().replace(/\s+/g, '-') || 'default';
-            const hasDesignForView = !!designImagesByView[viewKey];
-
-            let previewUrl: string | null = null;
-            if (hasDesignForView) {
-                previewUrl = await captureWebGLPreview(mockupId);
-            } else {
-                // If no design, just use the original mockup image URL
-                previewUrl = mockup?.imageUrl || null;
-            }
-
+            const previewUrl = await captureWebGLPreview(mockupId);
             if (!previewUrl) {
-                toast.error('Failed to capture or resolve preview');
+                toast.error('Failed to capture preview');
                 return;
             }
+
+            const mockup = filteredMockups.find((m: any) => m.id === mockupId);
+            const viewKey = mockup?.viewKey || 'front';
+            const colorKey = currentPreviewColor?.toLowerCase().replace(/\s+/g, '-') || 'default';
 
             await storeProductsApi.saveMockup(storeProductId, {
                 mockupType: 'model',
@@ -1894,14 +1886,14 @@ const MockupsLibrary = () => {
             });
 
             setSavedMockupUrls(prev => ({ ...prev, [mockupId]: previewUrl }));
-            toast.success(`Saved ${hasDesignForView ? 'model' : 'plain'} preview for ${colorKey}/${viewKey}`);
+            toast.success(`Saved model preview for ${colorKey}/${viewKey}`);
         } catch (error: any) {
             console.error('Failed to save mockup preview:', error);
             toast.error(error?.message || 'Failed to save preview');
         } finally {
             setSavingMockups(prev => ({ ...prev, [mockupId]: false }));
         }
-    }, [storeProductId, captureWebGLPreview, filteredMockups, currentPreviewColor, designImagesByView]);
+    }, [storeProductId, captureWebGLPreview, filteredMockups, currentPreviewColor]);
 
     const saveAllMockupPreviews = useCallback(async () => {
         if (!storeProductId) {
@@ -1927,32 +1919,22 @@ const MockupsLibrary = () => {
         const savedUrls: Record<string, string> = {};
         let successCount = 0;
 
-        // Use the most up-to-date totalMockups
-        const currentTotalMockups = allMockupsToSave.length;
-        toast.info(`Saving ${currentTotalMockups} mockup previews across ${allColorMockups.length} color(s)...`);
+        toast.info(`Saving ${allMockupsToSave.length} mockup previews across ${allColorMockups.length} color(s)...`);
 
         for (const { color, mockup } of allMockupsToSave) {
             const mockupKey = `${color}:${mockup.id}`;
             setSavingMockups(prev => ({ ...prev, [mockupKey]: true }));
 
             try {
-                const viewKey = (mockup.viewKey || 'front').toLowerCase();
-                const hasDesignForView = !!designImagesByView[viewKey];
-                let previewUrl: string | null = null;
+                await new Promise(resolve => setTimeout(resolve, 500));
 
-                if (hasDesignForView) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    previewUrl = await captureWebGLPreview(mockupKey);
-                } else {
-                    // Quick path: use original sample mockup URL if no design
-                    previewUrl = mockup.imageUrl;
-                }
-
+                const previewUrl = await captureWebGLPreview(mockupKey);
                 if (previewUrl) {
                     savedUrls[mockupKey] = previewUrl;
                     successCount++;
 
                     const colorKey = color.toLowerCase().replace(/\s+/g, '-');
+                    const viewKey = mockup.viewKey || 'front';
 
                     await storeProductsApi.saveMockup(storeProductId, {
                         mockupType: 'model',
@@ -1973,11 +1955,11 @@ const MockupsLibrary = () => {
         setIsSavingAll(false);
 
         if (successCount === allMockupsToSave.length) {
-            toast.success(`All ${successCount} mockups saved for ${allColorMockups.length} color(s)!`);
+            toast.success(`All ${successCount} model mockups saved for ${allColorMockups.length} color(s)!`);
         } else {
-            toast.warning(`Saved ${successCount} of ${currentTotalMockups} previews`);
+            toast.warning(`Saved ${successCount} of ${allMockupsToSave.length} previews`);
         }
-    }, [storeProductId, allColorMockups, captureWebGLPreview, designImagesByView]);
+    }, [storeProductId, allColorMockups, captureWebGLPreview]);
 
     const handleWebGLReady = useCallback((mockupId: string) => {
         setWebglReadyMap(prev => ({ ...prev, [mockupId]: true }));
@@ -1988,6 +1970,7 @@ const MockupsLibrary = () => {
             !hasAutoSaved &&
             storeProductId &&
             allColorMockups.length > 0 &&
+            Object.keys(designImagesByView).length > 0 &&
             catalogPhysicalDimensions &&
             !isSavingAll &&
             !isLoadingMockups
@@ -2000,7 +1983,6 @@ const MockupsLibrary = () => {
                     const hasDesignForView = !!designImagesByView[viewKey];
                     const hasPlaceholder = Array.isArray(m.placeholders) && m.placeholders.length > 0;
 
-                    // A mockup is "expected" if it has a design and needs WebGL rendering
                     if (m.imageUrl && hasDesignForView && hasPlaceholder) {
                         const mockupKey = `${group.color}:${m.id}`;
                         expectedMockups.push(mockupKey);
@@ -2008,8 +1990,7 @@ const MockupsLibrary = () => {
                 });
             });
 
-            // If ALL expected WebGL mockups are ready, save everything
-            const allReady = expectedMockups.length === 0 || expectedMockups.every(key => webglReadyMap[key]);
+            const allReady = expectedMockups.length > 0 && expectedMockups.every(key => webglReadyMap[key]);
 
             if (allReady) {
                 saveAllMockupPreviews();
@@ -2043,9 +2024,13 @@ const MockupsLibrary = () => {
         });
     }, [imageElements]);
 
-    // Calculate total mockups across all colors
+    // Calculate save progress - only count mockups with designs
     const totalMockups = allColorMockups.reduce((sum, { mockups }) => {
-        return sum + mockups.length;
+        const mockupsWithDesigns = mockups.filter((mockup: any) => {
+            const viewKey = (mockup.viewKey || 'front').toLowerCase();
+            return !!designImagesByView[viewKey];
+        });
+        return sum + mockupsWithDesigns.length;
     }, 0);
     const savedCount = Object.keys(savedMockupUrls).length;
     const saveProgress = totalMockups > 0 ? (savedCount / totalMockups) * 100 : 0;
@@ -2241,9 +2226,12 @@ const MockupsLibrary = () => {
                                     <div className="space-y-12">
                                         {allColorMockups.map(({ color, colorHex, mockups }) => {
                                             const colorMockupKey = (mockupId: string) => `${color}:${mockupId}`;
-                                            const displayMockups = mockups;
+                                            const mockupsWithDesigns = mockups.filter((mockup: any) => {
+                                                const viewKey = (mockup.viewKey || 'front').toLowerCase();
+                                                return !!designImagesByView[viewKey];
+                                            });
 
-                                            if (displayMockups.length === 0) return null;
+                                            if (mockupsWithDesigns.length === 0) return null;
 
                                             return (
                                                 <div key={color} className="space-y-6">
@@ -2256,14 +2244,14 @@ const MockupsLibrary = () => {
                                                         <div>
                                                             <h3 className="text-xl font-bold text-slate-800 capitalize">{color}</h3>
                                                             <p className="text-xs text-slate-500 font-medium">
-                                                                {displayMockups.length} mockup{displayMockups.length !== 1 ? 's' : ''} available
+                                                                {mockupsWithDesigns.length} mockup{mockupsWithDesigns.length !== 1 ? 's' : ''} available
                                                             </p>
                                                         </div>
                                                     </div>
 
                                                     {/* Mockups Grid */}
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                        {displayMockups.map((mockup: any, index: number) => {
+                                                        {mockupsWithDesigns.map((mockup: any, index: number) => {
                                                             const viewKey = (mockup.viewKey || 'front').toLowerCase();
                                                             const hasPlaceholder = Array.isArray(mockup.placeholders) && mockup.placeholders.length > 0;
                                                             const mockupKey = colorMockupKey(mockup.id);
@@ -2332,7 +2320,7 @@ const MockupsLibrary = () => {
                                                                     )}
 
                                                                     {/* Mockup Image - Larger with 4:5 aspect ratio */}
-                                                                    <div className="aspect-[4/3] relative bg-white overflow-hidden">
+                                                                    <div className="aspect-[4/5] relative bg-white overflow-hidden">
                                                                         {mockup.imageUrl && hasPlaceholder && catalogPhysicalDimensions ? (
                                                                             <div
                                                                                 ref={(el) => { webglContainerRefs.current[mockupKey] = el; }}
@@ -2412,7 +2400,7 @@ const MockupsLibrary = () => {
 
                         {/* CTA Button */}
                         {allColorMockups.length > 0 && Object.keys(savedMockupUrls).length > 0 && (
-                            <div className="flex justify-end pt-8 pb-12">
+                            <div className="flex justify-center pt-8 pb-12">
                                 <Button
                                     size="lg"
                                     className="px-10 py-6 text-lg font-bold gap-3 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-105 bg-gradient-to-r from-primary to-primary/80"
@@ -2426,7 +2414,7 @@ const MockupsLibrary = () => {
                                         });
                                     }}
                                 >
-                                    Continue
+                                    Continue to Listing Editor
                                     <ChevronRight className="h-6 w-6" />
                                 </Button>
                             </div>

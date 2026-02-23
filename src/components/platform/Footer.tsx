@@ -59,7 +59,7 @@ const Footer = () => {
             <div className="flex items-center gap-8">
               <img src={logo} alt="logo" />
             </div>
-            <p className="text-sm text-muted-foreground max-w-sm">
+            <p className="text-sm text-muted-foreground max-w-sm pb-4">
               A print-on-demand platform enabling businesses and creators to design, sell, and fulfill custom, sustainable merchandise without inventory.
             </p>
             <Link to="/auth">

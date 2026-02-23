@@ -12,6 +12,7 @@ import YouTubePartnerSection from "@/components/home/YouTubePartnerSection";
 import TestimonialSection from "@/components/home/TestimonialSection";
 import ExpertCTASection from "@/components/home/ExpertCTASection";
 import Footer from "@/components/home/Footer";
+import "./fonts.css";
 
 const Index = () => {
   return (

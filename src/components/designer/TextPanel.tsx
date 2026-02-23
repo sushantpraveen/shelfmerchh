@@ -158,16 +158,26 @@ const TextPanel: React.FC<TextPanelProps> = ({ onAddText, onClose }) => {
                                 <div key={font.family} className="border-b last:border-0">
                                     <button
                                         className="w-full flex items-center justify-between py-3 hover:bg-muted/50 px-2 rounded-sm transition-colors text-left"
-                                        onClick={() => toggleFontExpansion(font.family)}
+                                        // onClick={() => toggleFontExpansion(font.family)}
+                                        onClick={() => onAddText('Enter text', font.family)}
                                     >
-                                        <span className="font-medium text-sm">{font.family}</span>
-                                        <ChevronDown
+                                        {/* <span className="font-medium text-sm">{font.family}</span> */}
+
+                                        <span
+                                            className="text-sm"
+                                            style={{ fontFamily: font.family }}
+                                        >
+                                            {font.family}
+                                        </span>
+
+
+                                        {/* <ChevronDown
                                             className={`w-4 h-4 text-muted-foreground transition-transform ${expandedFonts.has(font.family) ? 'rotate-180' : ''
                                                 }`}
-                                        />
+                                        /> */}
                                     </button>
 
-                                    {expandedFonts.has(font.family) && (
+                                    {/* {expandedFonts.has(font.family) && (
                                         <div className="pb-3 px-2 space-y-2 animate-in slide-in-from-top-2 duration-200">
                                             <div className="h-16 bg-muted/30 rounded flex items-center justify-center border">
                                                 <span
@@ -185,7 +195,7 @@ const TextPanel: React.FC<TextPanelProps> = ({ onAddText, onClose }) => {
                                                 Use this font
                                             </Button>
                                         </div>
-                                    )}
+                                    )} */}
                                 </div>
                             ))}
 

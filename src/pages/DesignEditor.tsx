@@ -584,6 +584,24 @@ const DesignEditor: React.FC = () => {
     }
   }, [primaryColorHex, product?.design?.views]);
 
+  // Instrumentation + single-renderer assertion
+  useEffect(() => {
+    const container = webglCanvasRef.current;
+    if (!container) return;
+    const allCanvases = container.querySelectorAll('canvas');
+    const visibleCanvases = Array.from(allCanvases).filter(c => {
+      const style = window.getComputedStyle(c.parentElement || c);
+      return style.display !== 'none';
+    });
+    console.log(`[ASSERT] previewMode=${previewMode}, total canvases=${allCanvases.length}, visible=${visibleCanvases.length}`);
+
+    // Count Konva text nodes
+    if (stageRef.current) {
+      const texts = stageRef.current.find('Text');
+      console.log(`[INSTRUMENTATION DesignEditor] Konva Text nodes: ${texts.length}, expected: ${elements.filter(e => e.type === 'text').length}`);
+    }
+  }, [previewMode, elements]);
+
 
   const tools = [
     {
@@ -2329,7 +2347,7 @@ const DesignEditor: React.FC = () => {
           //     <div className="h-12 w-12 rounded overflow-hidden flex-shrink-0 bg-muted border border-border">
           //       <img src={previewUrl} alt="Saved mockup" className="h-full w-full object-cover" />
           //     </div>
-              {/* <div className="flex-1 min-w-0">
+          {/* <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">Mockup Auto-Saved</p>
                 <div className="flex items-center gap-2">
                   <p className="text-xs text-muted-foreground truncate capitalize flex-1">{currentView} view updated</p>
@@ -3208,7 +3226,8 @@ const DesignEditor: React.FC = () => {
                   // Otherwise show live WebGL (rendered below)
                   return null;
                 })()}
-                {(
+                {/* Pixi always visible (renders garment). Canvas elements only in preview mode. */}
+                <div>
                   <RealisticWebGLPreview
                     key={`preview-${currentView}-${currentViewData?.mockupImageUrl ? currentViewData.mockupImageUrl.slice(-20) : 'no-mockup'}-${getDesignUrlsHash(currentView)}`}
                     mockupImageUrl={
@@ -3276,12 +3295,12 @@ const DesignEditor: React.FC = () => {
                     previewMode={previewMode}
                     garmentTintHex={primaryColorHex}
                     enableGarmentTint={true}
-                    canvasElements={elements}
+                    canvasElements={previewMode ? elements : []}  // GHOSTING FIX: only render canvas elements in preview
                     currentView={currentView}
                     canvasPadding={canvasPadding}
                     PX_PER_INCH={PX_PER_INCH}
                   />
-                )}
+                </div>
 
                 {/* Konva Overlay - Just for Grid & Rulers now */}
                 {!previewMode && (
@@ -4386,6 +4405,8 @@ const TextElement: React.FC<{
     onClick: isEditMode ? onSelect : undefined,
     onDblClick: isEditMode ? onDblClick : undefined,
     onDragEnd: isEditMode ? handleDragEnd : undefined,
+    // GHOSTING FIX: Pixi is now hidden in edit mode, so Konva text should be fully visible
+
     onTransformEnd: isEditMode ? handleTransformEnd : undefined,
     dragBoundFunc: isEditMode ? dragBoundFunc : undefined,
     shadowBlur: element.shadowBlur || 0,
