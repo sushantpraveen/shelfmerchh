@@ -295,14 +295,14 @@ const Header = () => {
             </div>
           ) : (
             <>
-              <Link to="/auth">
+              {/* <Link to="/auth">
                 <Button variant="ghost" className="hidden sm:inline-flex text-sm font-medium">
                   Log in
                 </Button>
-              </Link>
+              </Link> */}
               <Link to="/auth">
                 <Button className="bg-primary hover:bg-lime-dark text-primary-foreground font-semibold px-5 py-2 rounded-lg">
-                  Sign up for free
+                  Login/Sign Up
                 </Button>
               </Link>
             </>
@@ -423,14 +423,14 @@ const Header = () => {
                 <div className="mt-8 flex flex-col gap-3">
                   {!isAuthenticated && (
                     <>
-                      <Link to="/auth" onClick={() => setIsMobileMenuOpen(false)}>
+                      {/* <Link to="/auth" onClick={() => setIsMobileMenuOpen(false)}>
                         <Button variant="outline" className="w-full justify-start h-12 text-base font-medium">
                           Log in
                         </Button>
-                      </Link>
+                      </Link> */}
                       <Link to="/auth" onClick={() => setIsMobileMenuOpen(false)}>
                         <Button className="w-full justify-start h-12 text-base font-medium bg-primary hover:bg-lime-dark text-primary-foreground">
-                          Sign up for free
+                          Login/Sign Up
                         </Button>
                       </Link>
                     </>

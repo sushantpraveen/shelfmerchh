@@ -58,7 +58,7 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
-    const isWhitelisted = WHITELISTED_DOMAINS.some(domain => 
+    const isWhitelisted = WHITELISTED_DOMAINS.some(domain =>
       origin.includes(domain)
     );
 
@@ -208,6 +208,7 @@ app.use('/api/variant-options', variantOptionsRoutes);
 app.use('/api/catalogue-fields', catalogueFieldsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/assets', assetsRoutes);
+app.use('/api/placeholders', require('./routes/placeholders'));
 app.use('/api/shipping-quote', shippingQuoteRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/wallet', walletRoutes);

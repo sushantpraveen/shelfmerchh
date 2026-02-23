@@ -37,14 +37,14 @@ export const Navbar = () => {
             </>
           ) : (
             <>
-              <Link to="/auth">
+              {/* <Link to="/auth">
                 <Button variant="ghost" size="sm" className="hidden md:inline-flex">
                   Log in
                 </Button>
-              </Link>
+              </Link> */}
               <Link to="/auth">
                 <Button size="sm" className="bg-primary hover:bg-primary-hover text-primary-foreground">
-                  Sign up for Free
+                  Login/Sign Up
                 </Button>
               </Link>
             </>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const CatalogProduct = require('../models/CatalogProduct');
 const CatalogProductVariant = require('../models/CatalogProductVariant');
+const Placeholder = require('../models/Placeholder');
 const { protect, authorize } = require('../middleware/auth');
 
 // @route   POST /api/products
@@ -167,6 +168,41 @@ router.post('/', protect, authorize('superadmin'), async (req, res) => {
     const product = await CatalogProduct.create(catalogProductData);
 
     console.log('Product created successfully:', product._id);
+
+    // Create placeholders in new collection
+    const placeholdersToInsert = [];
+    filteredViews.forEach(view => {
+      if (view.placeholders && view.placeholders.length > 0) {
+        view.placeholders.forEach(ph => {
+          placeholdersToInsert.push({
+            productId: product._id,
+            view: view.key,
+            placeholderId: ph.id,
+            placeholderName: ph.name || ph.id,
+            placeholderColor: ph.color || '#f472b6',
+            xIn: ph.xIn,
+            yIn: ph.yIn,
+            widthIn: ph.widthIn,
+            heightIn: ph.heightIn,
+            rotationDeg: ph.rotationDeg,
+            scale: ph.scale,
+            lockSize: ph.lockSize,
+            shapeType: ph.shapeType,
+            polygonPoints: ph.polygonPoints,
+            renderPolygonPoints: ph.renderPolygonPoints,
+            shapeRefinement: ph.shapeRefinement
+          });
+        });
+      }
+    });
+    if (placeholdersToInsert.length > 0) {
+      try {
+        await Placeholder.insertMany(placeholdersToInsert);
+        console.log(`Successfully created ${placeholdersToInsert.length} placeholders`);
+      } catch (phError) {
+        console.error('Error creating placeholders:', phError);
+      }
+    }
 
     // Create variants in separate collection if provided
     let createdVariants = [];
@@ -687,6 +723,43 @@ router.put('/:id', protect, authorize('superadmin'), async (req, res) => {
 
     await product.save();
 
+    // Update placeholders
+    if (design && design.views) {
+      await Placeholder.deleteMany({ productId: product._id });
+      const placeholdersToInsert = [];
+      design.views.forEach(view => {
+        if (view.placeholders && view.placeholders.length > 0) {
+          view.placeholders.forEach(ph => {
+            placeholdersToInsert.push({
+              productId: product._id,
+              view: view.key,
+              placeholderId: ph.id,
+              placeholderName: ph.name || ph.id,
+              placeholderColor: ph.color || '#f472b6',
+              xIn: ph.xIn,
+              yIn: ph.yIn,
+              widthIn: ph.widthIn,
+              heightIn: ph.heightIn,
+              rotationDeg: ph.rotationDeg,
+              scale: ph.scale,
+              lockSize: ph.lockSize,
+              shapeType: ph.shapeType,
+              polygonPoints: ph.polygonPoints,
+              renderPolygonPoints: ph.renderPolygonPoints,
+              shapeRefinement: ph.shapeRefinement
+            });
+          });
+        }
+      });
+      if (placeholdersToInsert.length > 0) {
+        try {
+          await Placeholder.insertMany(placeholdersToInsert);
+        } catch (phErr) {
+          console.error('Error updating placeholders:', phErr);
+        }
+      }
+    }
+
     // Handle variants update if provided
     // Note: Variants should now be managed via /api/variants endpoints
     // This code maintains backward compatibility for bulk updates
@@ -796,6 +869,9 @@ router.delete('/:id', protect, authorize('superadmin'), async (req, res) => {
       catalogProductId: req.params.id
     });
     console.log(`Deleted ${variantDeleteResult.deletedCount} catalog variants for product ${req.params.id}`);
+
+    // Delete placeholders
+    await Placeholder.deleteMany({ productId: req.params.id });
 
     // Permanently delete the product from database
     await CatalogProduct.findByIdAndDelete(req.params.id);

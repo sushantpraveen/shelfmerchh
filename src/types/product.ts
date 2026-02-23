@@ -44,6 +44,8 @@ export interface Placeholder {
   rotationDeg: number; // Rotation in degrees
   scale?: number; // Visual scale multiplier (default: 1.0) - for display only
   lockSize?: boolean; // If true, dragging handles only changes scale, not widthIn/heightIn
+  name?: string; // Admin-defined name for this placeholder
+  color?: string; // Random light color assigned to this placeholder
   // For polygon/magnetic lasso placeholders
   polygonPoints?: Array<{ xIn: number; yIn: number }>; // Polygon points in inches (relative to xIn, yIn or absolute)
   shapeType?: 'rect' | 'polygon'; // Shape type: rectangle (default) or polygon (from magnetic lasso)

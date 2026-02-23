@@ -46,6 +46,7 @@ interface CanvasElement {
   visible?: boolean;
   locked?: boolean;
   zIndex: number;
+  name?: string; // Human-readable name
   view?: string; // Store which view this element belongs to (e.g., 'front', 'back')
   // Text specific
   text?: string;
@@ -103,6 +104,8 @@ interface HistoryState {
 
 interface Placeholder {
   id: string;
+  name?: string;
+  color?: string;
   xIn: number;
   yIn: number;
   widthIn: number;
@@ -215,11 +218,12 @@ const DesignEditor: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [showRightPanel, setShowRightPanel] = useState(window.innerWidth >= 1024);
   const [showLeftPanel, setShowLeftPanel] = useState(window.innerWidth >= 1024);
-  const [uploadedImagePreview, setUploadedImagePreview] = useState<string[]>([]);
+  const [uploadedImagePreview, setUploadedImagePreview] = useState<{ url: string; name: string }[]>([]);
   const [selectedPlaceholderId, setSelectedPlaceholderId] = useState<string | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<string>('product');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mobileToolStage, setMobileToolStage] = useState<'none' | 'menu' | 'detail'>('none');
+  const [fetchedPlaceholders, setFetchedPlaceholders] = useState<Placeholder[]>([]);
 
   // Track if selection is from adding an asset (to prevent auto-opening properties on mobile)
   const isAddingAssetRef = useRef(false);
@@ -895,6 +899,39 @@ const DesignEditor: React.FC = () => {
     }
   }, [id, product]);
 
+  // Fetch placeholders from new collection
+  useEffect(() => {
+    const fetchPlaceholders = async () => {
+      if (!product?._id || !currentView) return;
+      try {
+        const response = await fetch(`${API_BASE_URL}/placeholders?productId=${product._id}&view=${currentView}`);
+        const data = await response.json();
+        if (data.success && data.data) {
+          const mappedPlaceholders = data.data.map((ph: any) => ({
+            id: ph.placeholderId,
+            name: ph.placeholderName,
+            color: ph.placeholderColor,
+            xIn: ph.xIn,
+            yIn: ph.yIn,
+            widthIn: ph.widthIn,
+            heightIn: ph.heightIn,
+            rotationDeg: ph.rotationDeg,
+            scale: ph.scale,
+            lockSize: ph.lockSize,
+            shapeType: ph.shapeType,
+            polygonPoints: ph.polygonPoints,
+            renderPolygonPoints: ph.renderPolygonPoints,
+            shapeRefinement: ph.shapeRefinement
+          }));
+          setFetchedPlaceholders(mappedPlaceholders);
+        }
+      } catch (err) {
+        console.error('Error fetching placeholders:', err);
+      }
+    };
+    fetchPlaceholders();
+  }, [product?._id, currentView]);
+
   // Load mockup when view changes (if not already loaded)
   useEffect(() => {
     if (product?.design?.views) {
@@ -975,12 +1012,19 @@ const DesignEditor: React.FC = () => {
 
   // Get all placeholders for current view - EXACT LOGIC FROM CanvasMockup.tsx
   const placeholders = useMemo(() => {
-    if (!currentViewData?.placeholders || currentViewData.placeholders.length === 0) {
+    const sourcePlaceholders = fetchedPlaceholders.length > 0
+      ? fetchedPlaceholders
+      : (currentViewData?.placeholders || []); // Fallback for backward compat if DB empty
+
+    if (!sourcePlaceholders || sourcePlaceholders.length === 0) {
       console.log('No placeholders found for current view');
       return [];
     }
 
-    const converted = currentViewData.placeholders.map((placeholder: Placeholder) => {
+    const visualColors = ['#ec4899', '#8ce2f5', '#a3ffc6', '#f4fea9', '#ffe2db']; // light blue, light green, light yellow, light pink
+
+    const converted = sourcePlaceholders.map((placeholder: Placeholder, index: number) => {
+      const visualColor = visualColors[index % visualColors.length];
       const scale = placeholder.scale ?? 1.0;
       const isPolygon = placeholder.shapeType === 'polygon' && placeholder.polygonPoints && placeholder.polygonPoints.length >= 3;
 
@@ -1033,7 +1077,7 @@ const DesignEditor: React.FC = () => {
         rotation: placeholder.rotationDeg || 0,
         scale,
         lockSize: placeholder.lockSize || false,
-        original: placeholder,
+        original: { ...placeholder, color: visualColor }, // Overwrite color for UI only
         isPolygon,
         polygonPointsPx
       };
@@ -1042,7 +1086,7 @@ const DesignEditor: React.FC = () => {
     console.log('All placeholders converted:', converted);
 
     return converted;
-  }, [currentViewData, PX_PER_INCH, inchesToPixels, canvasPadding]);
+  }, [fetchedPlaceholders, currentViewData, PX_PER_INCH, inchesToPixels, canvasPadding]);
 
   // Primary print area (first placeholder or default)
   const printArea = useMemo(() => {
@@ -1319,8 +1363,25 @@ const DesignEditor: React.FC = () => {
 
   // Element manipulation
   const addElement = (element: Omit<CanvasElement, 'id' | 'zIndex'>): string => {
+    let finalName = element.name || (element.type === 'image' ? 'Image' : element.type === 'text' ? 'Text' : 'Shape');
+    if (finalName) {
+      const baseNameStr = finalName as string;
+      const existingNames = elements
+        .filter(e => e.view === element.view && e.placeholderId === element.placeholderId && e.name)
+        .map(e => e.name as string);
+
+      let counter = 1;
+      let checkName = baseNameStr;
+      while (existingNames.includes(checkName)) {
+        checkName = `${baseNameStr} (${counter})`;
+        counter++;
+      }
+      finalName = checkName;
+    }
+
     const newElement: CanvasElement = {
       ...element,
+      name: finalName,
       id: Math.random().toString(36).substr(2, 9),
       zIndex: elements.length,
       visible: element.visible !== false,
@@ -1659,7 +1720,7 @@ const DesignEditor: React.FC = () => {
   }, [fitToScreen]);
 
   // Add image to canvas from URL
-  const addImageToCanvas = useCallback((imageUrl: string) => {
+  const addImageToCanvas = useCallback((imageUrl: string, assetName?: string) => {
     const img = new window.Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -1732,6 +1793,7 @@ const DesignEditor: React.FC = () => {
       const elementId = addElement({
         type: 'image',
         imageUrl,
+        name: assetName,
         x,
         y,
         width: finalWidth,
@@ -1854,10 +1916,10 @@ const DesignEditor: React.FC = () => {
       reader.onload = (event) => {
         const imageUrl = event.target?.result as string;
         // Always add to preview library - user must click to add to canvas
-        setUploadedImagePreview(prev => [...prev, imageUrl]);
+        setUploadedImagePreview(prev => [...prev, { url: imageUrl, name: file.name }]);
 
         // Immediately add to canvas
-        addImageToCanvas(imageUrl);
+        addImageToCanvas(imageUrl, file.name);
 
         successCount++;
         if (successCount === Array.from(files).length) {
@@ -1996,6 +2058,7 @@ const DesignEditor: React.FC = () => {
     addElement({
       type: 'shape',
       shapeType,
+      name: `${shapeType.charAt(0).toUpperCase() + shapeType.slice(1)} Shape`,
       x: targetArea.x + targetArea.width / 2 - maxSize / 2,
       y: targetArea.y + targetArea.height / 2 - maxSize / 2,
       width: maxSize,
@@ -3388,19 +3451,30 @@ const DesignEditor: React.FC = () => {
                       <Layer>
                         {placeholders.map((ph) => {
                           const isSelected = selectedPlaceholderId === ph.id;
-                          const stroke = isSelected ? '#db2777' : '#f472b6';
-                          const fill = isSelected ? 'rgba(251, 207, 232, 0.25)' : 'rgba(251, 207, 232, 0.18)';
+                          const baseColor = ph.original.color || '#f472b6';
+
+                          const hexToRgba = (hex: string, alpha: number) => {
+                            if (!hex.startsWith('#') || hex.length !== 7) return `rgba(251, 207, 232, ${alpha})`;
+                            const r = parseInt(hex.slice(1, 3), 16);
+                            const g = parseInt(hex.slice(3, 5), 16);
+                            const b = parseInt(hex.slice(5, 7), 16);
+                            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                          };
+
+                          const stroke = baseColor;
+                          const strokeWidth = isSelected ? 2 : 1;
+                          const fill = hexToRgba(baseColor, isSelected ? 0.25 : 0.15);
 
                           const commonHandlers = {
                             onClick: () => {
                               setSelectedPlaceholderId(ph.id);
                               selectedPlaceholderIdRef.current = ph.id;
-                              toast.info(`Placeholder ${ph.id.slice(0, 8)}... selected`);
+                              toast.info(`${ph.original.name || 'Placeholder'} selected`);
                             },
                             onTap: () => {
                               setSelectedPlaceholderId(ph.id);
                               selectedPlaceholderIdRef.current = ph.id;
-                              toast.info(`Placeholder ${ph.id.slice(0, 8)}... selected`);
+                              toast.info(`${ph.original.name || 'Placeholder'} selected`);
                             },
                           } as any;
 
@@ -3411,7 +3485,7 @@ const DesignEditor: React.FC = () => {
                                 points={ph.polygonPointsPx}
                                 closed
                                 stroke={stroke}
-                                strokeWidth={1}
+                                strokeWidth={strokeWidth}
                                 fill={fill}
                                 listening
                                 perfectDrawEnabled={false}
@@ -3428,7 +3502,7 @@ const DesignEditor: React.FC = () => {
                               width={ph.width}
                               height={ph.height}
                               stroke={stroke}
-                              strokeWidth={1}
+                              strokeWidth={strokeWidth}
                               fill={fill}
                               listening
                               {...commonHandlers}
@@ -5547,7 +5621,7 @@ const PropertiesPanel: React.FC<{
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {element.type === 'image' ? 'Image' : element.shapeType || 'Shape'}
+                          {element.type === 'image' ? (element.name || 'Image') : (element.name || element.shapeType || 'Shape')}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {element.width ? `${Math.round(element.width)}×${Math.round(element.height || 0)}` : 'Element'}
@@ -5947,6 +6021,10 @@ const LayersPanel: React.FC<{
   onDelete,
   onReorder,
 }) => {
+    const displayedElements = selectedPlaceholderId
+      ? elements.filter(e => e.placeholderId === selectedPlaceholderId)
+      : elements;
+
     return (
       <div className="space-y-4">
         {/* Placeholders Section */}
@@ -5957,6 +6035,7 @@ const LayersPanel: React.FC<{
               {placeholders.map((placeholder) => {
                 const designUrl = designUrlsByPlaceholder[placeholder.id];
                 const isSelected = selectedPlaceholderId === placeholder.id;
+                const baseColor = placeholder.original.color || '#f472b6';
 
                 return (
                   <div
@@ -5967,16 +6046,19 @@ const LayersPanel: React.FC<{
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="w-8 h-8 rounded border bg-muted flex items-center justify-center flex-shrink-0">
+                        <div
+                          className="w-8 h-8 rounded border flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: `${baseColor}40`, borderColor: baseColor }}
+                        >
                           {designUrl ? (
                             <img src={designUrl} alt="Design" className="w-full h-full object-contain rounded" />
                           ) : (
-                            <Square className="w-4 h-4 text-muted-foreground" />
+                            <Square className="w-4 h-4" style={{ color: baseColor }} />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">
-                            Placeholder {placeholder.id.slice(0, 8)}...
+                            {placeholder.original.name || `Placeholder ${placeholder.id.slice(0, 8)}`}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {placeholder.original.widthIn.toFixed(1)}" × {placeholder.original.heightIn.toFixed(1)}"
@@ -6010,9 +6092,11 @@ const LayersPanel: React.FC<{
         {/* Canvas Elements Section */}
         {elements.length > 0 && (
           <div className="space-y-2 border-t pt-4">
-            <Label className="text-sm font-semibold uppercase text-muted-foreground">Canvas Elements</Label>
+            <Label className="text-sm font-semibold uppercase text-muted-foreground">
+              Canvas Elements {selectedPlaceholderId ? '(Filtered)' : ''}
+            </Label>
             <div className="space-y-2">
-              {elements
+              {displayedElements
                 .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
                 .map((element) => (
                   <div
@@ -6027,7 +6111,7 @@ const LayersPanel: React.FC<{
                         {element.type === 'text' && <Type className="w-4 h-4 flex-shrink-0" />}
                         {element.type === 'shape' && <Square className="w-4 h-4 flex-shrink-0" />}
                         <span className="text-sm font-medium truncate">
-                          {element.type === 'text' ? (element.text || 'Text') : `${element.type} ${element.id.slice(0, 4)}`}
+                          {element.type === 'text' ? (element.text || 'Text') : (element.name || (element.type === 'image' ? 'Image' : element.shapeType || 'Shape'))}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -6076,7 +6160,7 @@ const LayersPanel: React.FC<{
 
 const ShapesPanel: React.FC<{
   onAddShape: (shapeType: CanvasElement['shapeType']) => void;
-  onAddAsset?: (assetUrl: string) => void;
+  onAddAsset?: (assetUrl: string, assetName?: string) => void;
   selectedPlaceholderId: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
 }> = ({ onAddShape, onAddAsset, selectedPlaceholderId, placeholders }) => {
@@ -6211,7 +6295,7 @@ const ShapesPanel: React.FC<{
                   onClick={(e) => {
                     e.stopPropagation();
                     if (asset.fileUrl && onAddAsset) {
-                      onAddAsset(asset.fileUrl);
+                      onAddAsset(asset.fileUrl, asset.title);
                     } else if (asset.fileUrl) {
                       toast.error('Asset handler not available');
                     }
@@ -6250,7 +6334,7 @@ const ShapesPanel: React.FC<{
 
 
 const GraphicsPanel: React.FC<{
-  onAddAsset: (assetUrl: string) => void;
+  onAddAsset: (assetUrl: string, assetName?: string) => void;
   selectedPlaceholderId: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
 }> = ({ onAddAsset, selectedPlaceholderId, placeholders }) => {
@@ -6333,7 +6417,7 @@ const GraphicsPanel: React.FC<{
                 onClick={(e) => {
                   e.stopPropagation();
                   if (asset.fileUrl) {
-                    onAddAsset(asset.fileUrl);
+                    onAddAsset(asset.fileUrl, asset.title);
                   } else {
                     toast.error('Asset file URL not available');
                   }
@@ -6366,7 +6450,7 @@ const GraphicsPanel: React.FC<{
 };
 
 const LogosPanel: React.FC<{
-  onAddAsset: (assetUrl: string) => void;
+  onAddAsset: (assetUrl: string, assetName?: string) => void;
   selectedPlaceholderId: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
 }> = ({ onAddAsset, selectedPlaceholderId, placeholders }) => {
@@ -6449,7 +6533,7 @@ const LogosPanel: React.FC<{
                 onClick={(e) => {
                   e.stopPropagation();
                   if (asset.fileUrl) {
-                    onAddAsset(asset.fileUrl);
+                    onAddAsset(asset.fileUrl, asset.title);
                   } else {
                     toast.error('Asset file URL not available');
                   }
@@ -6482,7 +6566,7 @@ const LogosPanel: React.FC<{
 };
 
 interface LibraryPanelProps {
-  onAddAsset: (assetUrl: string) => void;
+  onAddAsset: (assetUrl: string, assetName?: string) => void;
   selectedPlaceholderId?: string | null;
   placeholders?: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
 }
@@ -6639,7 +6723,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ onAddAsset, selectedPlaceho
                   onClick={(e) => {
                     e.stopPropagation();
                     if (asset.fileUrl) {
-                      onAddAsset(asset.fileUrl);
+                      onAddAsset(asset.fileUrl, asset.title);
                     } else {
                       toast.error('Asset file URL not available');
                     }
@@ -6675,7 +6759,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ onAddAsset, selectedPlaceho
 };
 
 interface AssetPanelProps {
-  onAddAsset: (assetUrl: string) => void;
+  onAddAsset: (assetUrl: string, assetName?: string) => void;
   category: string;
   title: string;
   selectedPlaceholderId: string | null;
@@ -6763,7 +6847,7 @@ const AssetPanel: React.FC<AssetPanelProps> = ({ onAddAsset, category, title, se
                 onClick={(e) => {
                   e.stopPropagation();
                   if (asset.fileUrl) {
-                    onAddAsset(asset.fileUrl);
+                    onAddAsset(asset.fileUrl, asset.title);
                   } else {
                     toast.error('Asset file URL not available');
                   }

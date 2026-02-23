@@ -145,6 +145,11 @@ export const UploadMockupsSection = ({
         const defaultXIn = (isSideView ? physicalLength : physicalWidth) / 2 - defaultWidthIn / 2;
         const defaultYIn = physicalHeight / 2 - defaultHeightIn / 2;
 
+        const name = window.prompt("Enter Placeholder Name:") || "New Placeholder";
+        const colors = ['#ADD8E6', '#90EE90', '#FFFFE0', '#FFB6C1']; // Light Blue, Light Green, Light Yellow, Light Pink
+        const currentIndex = currentMockup?.placeholders?.length || 0;
+        const color = colors[currentIndex % colors.length];
+
         const newPlaceholder: Placeholder = {
             id: `${activeView}-${Date.now()}`,
             xIn: defaultXIn,
@@ -154,6 +159,8 @@ export const UploadMockupsSection = ({
             rotationDeg: 0,
             scale: 1.0,
             lockSize: false,
+            name,
+            color,
         };
 
         const updatedMockups = sampleMockups.map(m =>
@@ -186,8 +193,16 @@ export const UploadMockupsSection = ({
         if (!currentMockup) return ""; // Should ideally throw or handle gracefully
 
         const id = `${activeView}-${Date.now()}`;
+
+        const name = window.prompt("Enter Placeholder Name:") || "New Placeholder";
+        const colors = ['#ADD8E6', '#90EE90', '#FFFFE0', '#FFB6C1']; // Light Blue, Light Green, Light Yellow, Light Pink
+        const currentIndex = currentMockup?.placeholders?.length || 0;
+        const color = colors[currentIndex % colors.length];
+
         const newPlaceholder: Placeholder = {
             id,
+            name,
+            color,
             ...placeholderWithoutId,
         };
 

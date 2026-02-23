@@ -7,8 +7,8 @@ import { Upload } from 'lucide-react';
 interface UploadPanelProps {
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onUploadClick: () => void;
-  imagePreview: string[] | null;
-  onImageClick: (imageUrl: string) => void;
+  imagePreview: Array<{ url: string; name: string }> | null;
+  onImageClick: (imageUrl: string, assetName?: string) => void;
   selectedPlaceholderId: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
 }
@@ -68,21 +68,21 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
             Uploaded Images ({imagePreview.length})
           </Label>
           <div className="grid grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
-            {imagePreview.map((image, index: number) => (
+            {imagePreview.map((item, index: number) => (
               <div
                 key={index}
                 className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
-                onClick={() => onImageClick(image)}
-                title="Click to add to canvas"
+                onClick={() => onImageClick(item.url, item.name)}
+                title={item.name}
               >
                 <img
-                  src={image}
-                  alt={`Uploaded Image ${index + 1}`}
+                  src={item.url}
+                  alt={item.name}
                   className="w-full h-full object-contain"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                  <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                    Click to Add
+                  <span className="text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity text-center px-1 truncate w-full">
+                    {item.name}
                   </span>
                 </div>
               </div>

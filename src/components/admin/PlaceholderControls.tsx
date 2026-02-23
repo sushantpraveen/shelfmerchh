@@ -26,7 +26,7 @@ export const PlaceholderControls = ({ placeholder, onUpdate, unit = 'in' }: Plac
   const formatValue = (value: number) => {
     return value.toFixed(1);
   };
-  
+
   const formatInputValue = (value: number): string => {
     // Round to 1 decimal place for display in input
     if (isNaN(value)) return '0';
@@ -49,13 +49,24 @@ export const PlaceholderControls = ({ placeholder, onUpdate, unit = 'in' }: Plac
             onUpdate({ lockSize: checked === true });
           }}
         />
-        <Label 
-          htmlFor="lockSize" 
+        <Label
+          htmlFor="lockSize"
           className="text-sm font-medium leading-none cursor-pointer flex items-center gap-2"
         >
           {lockSize ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
           Lock print size (inches)
         </Label>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="placeholderName">Name</Label>
+        <Input
+          id="placeholderName"
+          type="text"
+          value={placeholder.name || ''}
+          placeholder="e.g. Front Badge"
+          onChange={(e) => onUpdate({ name: e.target.value })}
+        />
       </div>
 
       {lockSize && (
@@ -167,8 +178,8 @@ export const PlaceholderControls = ({ placeholder, onUpdate, unit = 'in' }: Plac
 
       <div className="pt-2 border-t">
         <div className="text-xs text-muted-foreground font-mono">
-          X: {formatValue(placeholder.xIn)}{unitLabel} | Y: {formatValue(placeholder.yIn)}{unitLabel} | 
-          W: {formatValue(placeholder.widthIn)}{unitLabel} | H: {formatValue(placeholder.heightIn)}{unitLabel} | 
+          X: {formatValue(placeholder.xIn)}{unitLabel} | Y: {formatValue(placeholder.yIn)}{unitLabel} |
+          W: {formatValue(placeholder.widthIn)}{unitLabel} | H: {formatValue(placeholder.heightIn)}{unitLabel} |
           R: {placeholder.rotationDeg}°
         </div>
       </div>
@@ -216,13 +227,13 @@ export const PlaceholderControls = ({ placeholder, onUpdate, unit = 'in' }: Plac
                     roundCorners: 0,
                   };
                   const newRefinement = { ...currentRefinement, smoothness: value };
-                  
+
                   // Recompute renderPolygonPoints
                   const renderPoints = computeRefinedPolygonPoints(
                     placeholder.polygonPoints!,
                     newRefinement
                   );
-                  
+
                   onUpdate({
                     shapeRefinement: newRefinement,
                     renderPolygonPoints: renderPoints,
@@ -255,13 +266,13 @@ export const PlaceholderControls = ({ placeholder, onUpdate, unit = 'in' }: Plac
                     roundCorners: 0,
                   };
                   const newRefinement = { ...currentRefinement, bulgeStrength: value };
-                  
+
                   // Recompute renderPolygonPoints
                   const renderPoints = computeRefinedPolygonPoints(
                     placeholder.polygonPoints!,
                     newRefinement
                   );
-                  
+
                   onUpdate({
                     shapeRefinement: newRefinement,
                     renderPolygonPoints: renderPoints,
@@ -294,13 +305,13 @@ export const PlaceholderControls = ({ placeholder, onUpdate, unit = 'in' }: Plac
                     roundCorners: 0,
                   };
                   const newRefinement = { ...currentRefinement, roundCorners: value };
-                  
+
                   // Recompute renderPolygonPoints
                   const renderPoints = computeRefinedPolygonPoints(
                     placeholder.polygonPoints!,
                     newRefinement
                   );
-                  
+
                   onUpdate({
                     shapeRefinement: newRefinement,
                     renderPolygonPoints: renderPoints,
