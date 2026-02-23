@@ -13,10 +13,26 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Upload, Type, Image as ImageIcon, Folder, Sparkles, Undo2, Redo2,
   ZoomIn, ZoomOut, Move, Copy, Trash2, X, Plus, Package, Menu, Save, Layers, Eye, EyeOff,
   Lock, Unlock, AlignLeft, AlignCenter, AlignRight, Bold, Italic,
-  Underline, Palette, Grid, Ruler, Download, Settings, ChevronRight,
+  Underline, Palette, Grid, Ruler, Download, Settings, Settings2, ChevronRight,
   ChevronLeft, Maximize2, Minimize2, RotateCw, Square, Circle as CircleIcon, Triangle, Sparkles as SparklesIcon, Wand2,
   Heart, Star as StarIcon, ArrowRight, Search, Filter, SortAsc, FolderOpen, ArrowLeft, ArrowUp, ArrowDown, Pen, Camera, Layout
 } from 'lucide-react';
@@ -242,18 +258,10 @@ const DesignEditor: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Handle mobile layer selection -> show properties ONLY for manual selections
+  // Handle mobile layer selection -> NO AUTO-OPEN as per user request
   useEffect(() => {
     if (isMobile && selectedIds.length > 0) {
-      // Only auto-open properties if this is NOT from adding an asset
-      if (!isAddingAssetRef.current) {
-        setRightPanelTab('properties');
-        setShowRightPanel(true);
-        setShowLeftPanel(false);
-        setIsMobileMenuOpen(false);
-        setMobileToolStage('none');
-      }
-      // Reset the flag after handling
+      // Reset the flag after handling - we no longer auto-open properties
       isAddingAssetRef.current = false;
     }
   }, [selectedIds, isMobile]);
@@ -1138,17 +1146,7 @@ const DesignEditor: React.FC = () => {
     }
   }, [selectedIds, previewMode, elements]); // Add elements to dependency to update transformer when text changes
 
-  // Auto-open Properties panel when element (image/text) is selected in edit mode
-  useEffect(() => {
-    if (selectedIds.length > 0 && !previewMode) {
-      // Check if the selected element is an image or text type
-      const selectedElement = elements.find(el => el.id === selectedIds[0]);
-      if (selectedElement && (selectedElement.type === 'image' || selectedElement.type === 'text')) {
-        setRightPanelTab('properties');
-        setShowRightPanel(true);
-      }
-    }
-  }, [selectedIds, previewMode, elements]);
+
 
   // History management - proper undo/redo stack pattern
   // Get elements for current view only
@@ -3024,30 +3022,38 @@ const DesignEditor: React.FC = () => {
           </aside>
         )}
 
-        {/* Full-screen Mobile Tools Panel (Add Design) */}
-        {isMobile && !previewMode && isMobileMenuOpen && (
-          <div className="fixed inset-0 z-[100] bg-background flex flex-col animate-in slide-in-from-bottom duration-300">
-            {mobileToolStage === 'menu' ? (
-              <>
-                <div className="flex items-center justify-between p-4 border-b">
-                  <h3 className="text-lg font-extrabold tracking-tight">Add design</h3>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      setMobileToolStage('none');
-                    }}
-                  >
-                    <X className="w-5 h-5" />
-                  </Button>
+        {/* Mobile Tools Panel (Drawer based) */}
+        {isMobile && !previewMode && (
+          <Drawer
+            open={isMobileMenuOpen}
+            onOpenChange={setIsMobileMenuOpen}
+            modal={false}
+            snapPoints={[0.66, 0.8]}
+          >
+            <DrawerContent className="min-h-[66vh]" showOverlay={false}>
+              <DrawerHeader className="text-left border-b pb-4">
+                <div className="flex items-center justify-between">
+                  <DrawerTitle>
+                    {mobileToolStage === 'menu' ? 'Add design' : activeTool.charAt(0).toUpperCase() + activeTool.slice(1)}
+                  </DrawerTitle>
+                  <DrawerClose asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
+                      <X className="w-5 h-5" />
+                    </Button>
+                  </DrawerClose>
                 </div>
+              </DrawerHeader>
+
+              {mobileToolStage === 'menu' ? (
                 <div className="flex-1 overflow-y-auto p-6 bg-muted/5">
                   <div className="grid grid-cols-2 gap-4">
                     {tools.map((tool) => (
                       <button
                         key={tool.label}
-                        onClick={tool.onClick}
+                        onClick={() => {
+                          tool.onClick();
+                          setMobileToolStage('detail');
+                        }}
                         className="flex flex-col items-center justify-center gap-4 bg-background p-8 rounded-2xl shadow-sm border border-border/50 transition-all active:scale-95 group hover:border-primary/30"
                       >
                         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center group-active:bg-primary/20 transition-colors">
@@ -3058,40 +3064,34 @@ const DesignEditor: React.FC = () => {
                     ))}
                   </div>
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between px-4 py-2 border-b h-14 bg-background">
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => setMobileToolStage('menu')} className="rounded-full">
-                      <ArrowLeft className="w-5 h-5" />
-                    </Button>
-                    <span className="font-extrabold text-base capitalize tracking-tight">{activeTool}</span>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => { setIsMobileMenuOpen(false); setMobileToolStage('none'); }} className="rounded-full">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </div>
-
-                {/* Second Level: Horizontal Tab Switcher */}
-                <div className="border-b bg-muted/5 overflow-x-auto no-scrollbar flex-shrink-0">
-                  <div className="flex items-center p-3 gap-3 min-w-max px-4">
-                    {tools.map((tool) => (
-                      <button
-                        key={tool.label}
-                        onClick={tool.onClick}
-                        className={`px-5 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm border ${activeTool === tool.toolKey
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background text-muted-foreground border-border hover:bg-accent'
-                          }`}
-                      >
-                        {tool.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
+              ) : (
                 <div className="flex-1 overflow-hidden flex flex-col bg-background">
+                  <div className="border-b bg-muted/5 overflow-x-auto no-scrollbar flex-shrink-0">
+                    <div className="flex items-center p-3 gap-3 min-w-max px-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setMobileToolStage('menu')}
+                        className="rounded-full gap-1 h-8 px-2"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Back</span>
+                      </Button>
+                      {tools.map((tool) => (
+                        <button
+                          key={tool.label}
+                          onClick={tool.onClick}
+                          className={`px-5 py-2 rounded-full text-[11px] font-bold transition-all whitespace-nowrap shadow-sm border ${activeTool === tool.toolKey
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border hover:bg-accent'
+                            }`}
+                        >
+                          {tool.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <ScrollArea className="flex-1 no-scrollbar">
                     {activeTool === 'upload' && (
                       <UploadPanel
@@ -3113,7 +3113,7 @@ const DesignEditor: React.FC = () => {
                     {activeTool === 'text' && (
                       <TextPanel
                         onAddText={(text, font) => handleAddTextWithParams(text, font)}
-                        onClose={() => setShowLeftPanel(false)}
+                        onClose={() => setIsMobileMenuOpen(false)}
                       />
                     )}
                     {activeTool === 'shapes' && (
@@ -3157,9 +3157,9 @@ const DesignEditor: React.FC = () => {
                     {activeTool === 'templates' && <TemplatesPanel />}
                   </ScrollArea>
                 </div>
-              </>
-            )}
-          </div>
+              )}
+            </DrawerContent>
+          </Drawer>
         )}
 
         {/* Left Panel - Desktop Only (hidden in preview mode) */}
@@ -3378,12 +3378,20 @@ const DesignEditor: React.FC = () => {
                         const clickedOnEmpty = e.target === e.target.getStage();
                         if (clickedOnEmpty) {
                           setSelectedIds([]);
+                          if (isMobile) {
+                            setShowRightPanel(false);
+                            setIsMobileMenuOpen(false);
+                          }
                         }
                       }}
                       onTouchStart={(e: any) => {
                         const clickedOnEmpty = e.target === e.target.getStage();
                         if (clickedOnEmpty) {
                           setSelectedIds([]);
+                          if (isMobile) {
+                            setShowRightPanel(false);
+                            setIsMobileMenuOpen(false);
+                          }
                         }
                       }}
                     >
@@ -3768,10 +3776,11 @@ const DesignEditor: React.FC = () => {
                             borderEnabled={true}
                             borderStroke="#22c55e"
                             borderStrokeWidth={2}
-                            anchorFill="#22c55e"
-                            anchorStroke="#16a34a"
-                            anchorStrokeWidth={1}
-                            anchorSize={8}
+                            anchorFill="#ffffff"
+                            anchorStroke="#22c55e"
+                            anchorStrokeWidth={2}
+                            anchorSize={isMobile ? 14 : 10}
+                            anchorCornerRadius={isMobile ? 7 : 4}
                             keepRatio={false}
                             boundBoxFunc={(oldBox, newBox) => {
                               // Constrain transformer to print area if element has placeholder
@@ -3820,29 +3829,48 @@ const DesignEditor: React.FC = () => {
                 </div>
               )}
             </div>
-          ) : null}
+          ) : (
+            /* Design Area - Centered with background and shadow */
+            <div
+              className="flex-1 relative bg-[#f1f1f1] overflow-hidden flex items-center justify-center p-4"
+              onClick={() => {
+                if (isMobile) {
+                  setSelectedIds([]);
+                  setSelectedPlaceholderId(null);
+                  setShowRightPanel(false);
+                  setIsMobileMenuOpen(false);
+                }
+              }}
+            >
+              <div
+                ref={webglCanvasRef}
+                onClick={(e) => e.stopPropagation()}
+                className="relative shadow-2xl transition-all duration-300 bg-white"
+                style={{
+                  borderRadius: '2px', // Very subtle rounding
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Fallback canvas content if WebGL is not rendering yet */}
+                {!previewMode && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white">
+                    {/* This space will be occupied by the WebGL canvas */}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right Panel (hidden in preview mode) */}
-        {!previewMode && showRightPanel && (
-          <div className={`${isMobile ? 'fixed inset-0 z-[60] bg-background' : 'w-[350px] border-l'} bg-background flex flex-col h-full`}>
-            {isMobile && (
-              <div className="flex items-center justify-between p-4 border-b">
-                <h3 className="font-bold">Settings</h3>
-                <Button variant="ghost" size="icon" onClick={() => setShowRightPanel(false)}>
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-            )}
+        {/* Right Panel (Desktop) */}
+        {!previewMode && showRightPanel && !isMobile && (
+          <div className="w-[350px] border-l bg-background flex flex-col h-full">
             <Tabs value={rightPanelTab} onValueChange={setRightPanelTab} className="flex-1 flex flex-col min-h-0">
-              {/* Hide tabs on mobile - navigation is via bottom bar buttons */}
-              {!isMobile && (
-                <TabsList className="w-full rounded-none border-b flex-shrink-0">
-                  <TabsTrigger value="product" className="flex-1">Product</TabsTrigger>
-                  <TabsTrigger value="properties" className="flex-1">Properties</TabsTrigger>
-                  <TabsTrigger value="layers" className="flex-1">Layers</TabsTrigger>
-                </TabsList>
-              )}
+              <TabsList className="w-full rounded-none border-b flex-shrink-0">
+                <TabsTrigger value="product" className="flex-1">Product</TabsTrigger>
+                <TabsTrigger value="properties" className="flex-1">Properties</TabsTrigger>
+                <TabsTrigger value="layers" className="flex-1">Layers</TabsTrigger>
+              </TabsList>
 
               <TabsContent value="product" className="flex-1 overflow-y-auto p-4 min-h-0">
                 <ProductInfoPanel
@@ -3928,8 +3956,97 @@ const DesignEditor: React.FC = () => {
             </Tabs>
           </div>
         )}
+
+        {/* Mobile Panels - Drawer based */}
+        {isMobile && !previewMode && (
+          <Drawer
+            open={showRightPanel}
+            onOpenChange={setShowRightPanel}
+            modal={false}
+            snapPoints={[0.3, 0.6, 0.8]}
+          >
+            <DrawerContent className="h-full border-t border-border/50 shadow-2xl" showOverlay={false}>
+              <DrawerHeader className="text-left border-b pb-4">
+                <div className="flex items-center justify-between">
+                  <DrawerTitle className="capitalize">
+                    {rightPanelTab}
+                  </DrawerTitle>
+                  <DrawerClose asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
+                      <X className="w-5 h-5" />
+                    </Button>
+                  </DrawerClose>
+                </div>
+              </DrawerHeader>
+
+              <div className="flex-1 overflow-y-auto p-4 min-h-0">
+                {rightPanelTab === 'product' && (
+                  <ProductInfoPanel
+                    product={product}
+                    isLoading={isLoadingProduct}
+                    selectedColors={selectedColors}
+                    selectedSizes={selectedSizes}
+                    selectedSizesByColor={selectedSizesByColor}
+                    onColorToggle={handleColorToggle}
+                    onSizeToggle={handleSizeToggle}
+                    onSizeToggleForColor={handleSizeToggleForColor}
+                    onPrimaryColorHexChange={(hex) => {
+                      setPrimaryColorHex(hex);
+                      setHasUnsavedChanges(true);
+                    }}
+                  />
+                )}
+
+                {rightPanelTab === 'layers' && (
+                  <LayersPanel
+                    placeholders={placeholders}
+                    selectedPlaceholderId={selectedPlaceholderId}
+                    onSelectPlaceholder={(id) => {
+                      setSelectedPlaceholderId(id);
+                      selectedPlaceholderIdRef.current = id;
+                      setSelectedIds([]);
+                    }}
+                    designUrlsByPlaceholder={getDesignUrlsForView(currentView)}
+                    onDesignRemove={(placeholderId) => {
+                      removeDesignUrlForView(currentView, placeholderId);
+                    }}
+                    elements={elements}
+                    selectedIds={selectedIds}
+                    onSelectElement={(id) => {
+                      setSelectedIds([id]);
+                      setSelectedPlaceholderId(null);
+                      selectedPlaceholderIdRef.current = null;
+                    }}
+                    onUpdate={updateElement}
+                    onDelete={(id) => {
+                      setElements(prev => prev.filter(el => el.id !== id));
+                      setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
+                      setHasUnsavedChanges(true);
+                      setTimeout(() => saveToHistory(true), 0);
+                    }}
+                    onReorder={(newOrder) => {
+                      setElements(newOrder);
+                      setHasUnsavedChanges(true);
+                      setTimeout(() => saveToHistory(true), 0);
+                    }}
+                    // Props for Mobile Properties Integration
+                    isMobile={true}
+                    displacementSettings={displacementSettings}
+                    onDisplacementSettingsChange={handleDisplacementSettingsChange}
+                    onDesignUpload={(placeholderId, designUrl) => {
+                      setDesignUrlForView(currentView, placeholderId, designUrl);
+                    }}
+                    PX_PER_INCH={PX_PER_INCH}
+                    canvasPadding={canvasPadding}
+                  />
+                )}
+              </div>
+            </DrawerContent>
+          </Drawer>
+        )}
       </div>
 
+      {/* Bottom Bar (hidden in preview mode) */}
       {/* Bottom Bar (hidden in preview mode) */}
       {!previewMode && (
         <div className={`${isMobile ? 'h-[75px] pb-2' : 'h-[50px]'} border-t flex items-center justify-between px-4 bg-background z-30`}>
@@ -3949,7 +4066,7 @@ const DesignEditor: React.FC = () => {
                   <div className={`p-1.5 rounded-md ${rightPanelTab === 'product' && showRightPanel ? 'bg-primary/10' : 'group-active:bg-muted'}`}>
                     <Package className="w-7 h-7" />
                   </div>
-                  <span className="text-[11px] font-bold uppercase tracking-wide">Products</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide">Products</span>
                 </button>
               </div>
 
@@ -3993,7 +4110,7 @@ const DesignEditor: React.FC = () => {
                   <div className={`p-1.5 rounded-md ${rightPanelTab === 'layers' && showRightPanel ? 'bg-primary/10' : 'group-active:bg-muted'}`}>
                     <Layers className="w-7 h-7" />
                   </div>
-                  <span className="text-[11px] font-bold uppercase tracking-wide">Layers</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide">Layers</span>
                 </button>
               </div>
             </div>
@@ -4926,243 +5043,6 @@ const PropertiesPanel: React.FC<{
       }
     };
 
-    // Show placeholder properties when placeholder is selected
-    // if (selectedPlaceholderId && selectedPlaceholder) {
-    //   const designUrl = designUrlsByPlaceholder[selectedPlaceholderId];
-    //   const transform = designTransforms[selectedPlaceholderId] || { x: 0, y: 0, scale: 1 };
-
-    //   return (
-    //     <div className="space-y-6">
-    //       {/* Size Section */}
-    //       {/* {designUrl && (
-    //         <div className="space-y-4">
-    //           <h3 className="text-sm font-semibold">Size</h3>
-    //           <div className="space-y-2">
-    //             <div>
-    //               <Label className="text-xs">Width: {Math.round(selectedPlaceholder.width * PX_PER_INCH)}px</Label>
-    //               <Slider
-    //                 value={[selectedPlaceholder.width * PX_PER_INCH]}
-    //                 onValueChange={([value]) => {
-    //                   // Update placeholder width
-    //                   const newWidth = value / PX_PER_INCH;
-    //                   // This would need to be handled by a callback, but keeping structure for now
-    //                 }}
-    //                 min={10}
-    //                 max={1000}
-    //                 step={1}
-    //               />
-    //             </div>
-    //             <div>
-    //               <Label className="text-xs">Height: {Math.round(selectedPlaceholder.height * PX_PER_INCH)}px</Label>
-    //               <Slider
-    //                 value={[selectedPlaceholder.height * PX_PER_INCH]}
-    //                 onValueChange={([value]) => {
-    //                   // Update placeholder height
-    //                   const newHeight = value / PX_PER_INCH;
-    //                   // This would need to be handled by a callback, but keeping structure for now
-    //                 }}
-    //                 min={10}
-    //                 max={1000}
-    //                 step={1}
-    //               />
-    //             </div>
-    //             <div className="flex items-center gap-2">
-    //               <input
-    //                 type="checkbox"
-    //                 id="lockAspect"
-    //                 className="w-4 h-4"
-    //                 checked={false}
-    //                 onChange={() => {}}
-    //               />
-    //               <Label htmlFor="lockAspect" className="text-xs cursor-pointer">
-    //                 🔒 Lock aspect ratio
-    //               </Label>
-    //             </div>
-    //           </div>
-    //         </div>
-    //       )} */}
-
-    //       {/* Position Section */}
-    //       {/* {designUrl && (
-    //         <div className="space-y-4">
-    //           <h3 className="text-sm font-semibold">Position</h3>
-    //           <div className="space-y-2">
-    //             <div>
-    //               <div className="flex items-center justify-between mb-1">
-    //                 <Label className="text-xs">X: {Math.round(transform.x * PX_PER_INCH)}px</Label>
-    //               </div>
-    //               <Slider
-    //                 value={[transform.x * PX_PER_INCH]}
-    //                 onValueChange={([value]) => {
-    //                   setDesignTransforms(prev => ({
-    //                     ...prev,
-    //                     [selectedPlaceholderId]: { ...transform, x: value / PX_PER_INCH },
-    //                   }));
-    //                 }}
-    //                 min={0}
-    //                 max={1000}
-    //                 step={1}
-    //               />
-    //             </div>
-    //             <div>
-    //               <div className="flex items-center justify-between mb-1">
-    //                 <Label className="text-xs">Y: {Math.round(transform.y * PX_PER_INCH)}px</Label>
-    //               </div>
-    //               <Slider
-    //                 value={[transform.y * PX_PER_INCH]}
-    //                 onValueChange={([value]) => {
-    //                   setDesignTransforms(prev => ({
-    //                     ...prev,
-    //                     [selectedPlaceholderId]: { ...transform, y: value / PX_PER_INCH },
-    //                   }));
-    //                 }}
-    //                 min={0}
-    //                 max={1000}
-    //                 step={1}
-    //               />
-    //             </div>
-    //           </div>
-    //         </div>
-    //       )} */}
-
-    //       {/* Flip Section */}
-    //       {/* {designUrl && (
-    //         <div className="space-y-4">
-    //           <h3 className="text-sm font-semibold">Flip</h3>
-    //           <div className="space-y-2">
-    //             <div className="flex items-center gap-2">
-    //               <input
-    //                 type="checkbox"
-    //                 id="flipH"
-    //                 className="w-4 h-4"
-    //                 checked={false}
-    //                 onChange={() => {}}
-    //               />
-    //               <Label htmlFor="flipH" className="text-xs cursor-pointer">
-    //                 ↔️ Horizontal
-    //               </Label>
-    //             </div>
-    //             <div className="flex items-center gap-2">
-    //               <input
-    //                 type="checkbox"
-    //                 id="flipV"
-    //                 className="w-4 h-4"
-    //                 checked={false}
-    //                 onChange={() => {}}
-    //               />
-    //               <Label htmlFor="flipV" className="text-xs cursor-pointer">
-    //                 ↕️ Vertical
-    //               </Label>
-    //             </div>
-    //           </div>
-    //         </div>
-    //       )} */}
-
-    //       {/* Opacity Section */}
-    //       {/* {designUrl && (
-    //         <div className="space-y-4">
-    //           <h3 className="text-sm font-semibold">Opacity</h3>
-    //           <div className="space-y-2">
-    //             <div>
-    //               <Label className="text-xs">Opacity: 100%</Label>
-    //               <Slider
-    //                 value={[100]}
-    //                 onValueChange={() => {}}
-    //                 min={0}
-    //                 max={100}
-    //                 step={1}
-    //               />
-    //             </div>
-    //           </div>
-    //         </div>
-    //       )} */}
-
-    //       {/* Blend Mode Section */}
-    //       {/* {designUrl && (
-    //         <div className="space-y-4">
-    //           <h3 className="text-sm font-semibold">Blend Mode</h3>
-    //           <select
-    //             className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-    //             value="normal"
-    //             onChange={() => {}}
-    //           >
-    //             <option value="normal">Normal</option>
-    //             <option value="multiply">Multiply</option>
-    //             <option value="screen">Screen</option>
-    //             <option value="overlay">Overlay</option>
-    //             <option value="darken">Darken</option>
-    //             <option value="lighten">Lighten</option>
-    //           </select>
-    //           <p className="text-xs text-muted-foreground">
-    //             Adjusts how the design blends with the mockup
-    //           </p>
-    //         </div>
-    //       )} */}
-
-    //       {/* Tune Realism (Displacement Settings) */}
-    //       <div className="space-y-4">
-    //         <h3 className="text-sm font-semibold">Tune Realism</h3>
-    //         <div className="space-y-2">
-    //           <div>
-    //             <div className="flex items-center justify-between mb-1">
-    //               <Label className="text-xs">Displacement X</Label>
-    //               <span className="text-xs">{displacementSettings.scaleX}</span>
-    //             </div>
-    //             <Slider
-    //               value={[displacementSettings.scaleX]}
-    //               onValueChange={([value]) => {
-    //                 onDisplacementSettingsChange({
-    //                   ...displacementSettings,
-    //                   scaleX: value
-    //                 });
-    //               }}
-    //               min={0}
-    //               max={100}
-    //               step={1}
-    //             />
-    //           </div>
-    //           <div>
-    //             <div className="flex items-center justify-between mb-1">
-    //               <Label className="text-xs">Displacement Y</Label>
-    //               <span className="text-xs">{displacementSettings.scaleY}</span>
-    //             </div>
-    //             <Slider
-    //               value={[displacementSettings.scaleY]}
-    //               onValueChange={([value]) => {
-    //                 onDisplacementSettingsChange({
-    //                   ...displacementSettings,
-    //                   scaleY: value
-    //                 });
-    //               }}
-    //               min={0}
-    //               max={100}
-    //               step={1}
-    //             />
-    //           </div>
-    //           <div>
-    //             <div className="flex items-center justify-between mb-1">
-    //               <Label className="text-xs">Fold Contrast</Label>
-    //               <span className="text-xs">{displacementSettings.contrastBoost.toFixed(1)}</span>
-    //             </div>
-    //             <Slider
-    //               value={[displacementSettings.contrastBoost]}
-    //               onValueChange={([value]) => {
-    //                 onDisplacementSettingsChange({
-    //                   ...displacementSettings,
-    //                   contrastBoost: value
-    //                 });
-    //               }}
-    //               min={1}
-    //               max={5}
-    //               step={0.1}
-    //             />
-    //           </div>
-    //         </div>
-    //       </div>
-    //     </div>
-    //   );
-    // }
-
     // Show element properties when element is selected
     if (selectedElement) {
       const element = selectedElement;
@@ -5988,10 +5868,91 @@ const PropertiesPanel: React.FC<{
       );
     }
 
-    // Fallback when nothing is selected
+    // Show placeholder properties when placeholder is selected
+    // if (selectedPlaceholderId && selectedPlaceholder) {
+    //   return (
+    //     <div className="space-y-6">
+    //       <div className="space-y-4">
+    //         <h3 className="text-sm font-semibold">Tune Realism</h3>
+    //         <div className="space-y-2">
+    //           <div>
+    //             <div className="flex items-center justify-between mb-1">
+    //               <Label className="text-xs">Displacement X</Label>
+    //               <span className="text-xs">{displacementSettings.scaleX}</span>
+    //             </div>
+    //             <Slider
+    //               value={[displacementSettings.scaleX]}
+    //               onValueChange={([value]) => {
+    //                 onDisplacementSettingsChange({
+    //                   ...displacementSettings,
+    //                   scaleX: value
+    //                 });
+    //               }}
+    //               min={0}
+    //               max={100}
+    //               step={1}
+    //             />
+    //           </div>
+    //           <div>
+    //             <div className="flex items-center justify-between mb-1">
+    //               <Label className="text-xs">Displacement Y</Label>
+    //               <span className="text-xs">{displacementSettings.scaleY}</span>
+    //             </div>
+    //             <Slider
+    //               value={[displacementSettings.scaleY]}
+    //               onValueChange={([value]) => {
+    //                 onDisplacementSettingsChange({
+    //                   ...displacementSettings,
+    //                   scaleY: value
+    //                 });
+    //               }}
+    //               min={0}
+    //               max={100}
+    //               step={1}
+    //             />
+    //           </div>
+    //           <div>
+    //             <div className="flex items-center justify-between mb-1">
+    //               <Label className="text-xs">Fold Contrast</Label>
+    //               <span className="text-xs">{displacementSettings.contrastBoost.toFixed(1)}</span>
+    //             </div>
+    //             <Slider
+    //               value={[displacementSettings.contrastBoost]}
+    //               onValueChange={([value]) => {
+    //                 onDisplacementSettingsChange({
+    //                   ...displacementSettings,
+    //                   contrastBoost: value
+    //                 });
+    //               }}
+    //               min={1}
+    //               max={5}
+    //               step={0.1}
+    //             />
+    //           </div>
+    //         </div>
+    //       </div>
+    //     </div>
+    //   );
+    // }
+
+    // Final fallback logic
+    const hasElementsInActivePlaceholder = selectedPlaceholderId ? elements.some(el => el.placeholderId === selectedPlaceholderId) : false;
+
+    if (selectedPlaceholderId && hasElementsInActivePlaceholder) {
+      return null; // Don't show "No Selection" if elements exist in the placeholder
+    }
+
     return (
-      <div className="text-center text-muted-foreground py-8">
-        <p className="text-sm">Select a placeholder or element to edit properties</p>
+      <div className="flex-1 flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-500">
+        <div className="w-20 h-20 rounded-3xl bg-muted/30 flex items-center justify-center mb-6 ring-1 ring-border/50 shadow-sm">
+          <Settings2 className="w-10 h-10 text-muted-foreground/40" />
+        </div>
+        <div className="space-y-2 px-8">
+          <h3 className="font-bold text-xl tracking-tight text-foreground">No Selection</h3>
+          <p className="text-sm text-muted-foreground max-w-[240px] leading-relaxed">
+            Select an element on the canvas to customize its appearance, size, and position.
+          </p>
+        </div>
       </div>
     );
   };
@@ -6008,6 +5969,13 @@ const LayersPanel: React.FC<{
   onUpdate: (id: string, updates: Partial<CanvasElement>) => void;
   onDelete: (id: string) => void;
   onReorder: (newOrder: CanvasElement[]) => void;
+  // Props for Mobile Properties Integration
+  isMobile?: boolean;
+  displacementSettings?: DisplacementSettings;
+  onDisplacementSettingsChange?: (settings: DisplacementSettings) => void;
+  onDesignUpload?: (placeholderId: string, designUrl: string) => void;
+  PX_PER_INCH?: number;
+  canvasPadding?: number;
 }> = ({
   placeholders,
   selectedPlaceholderId,
@@ -6020,10 +5988,28 @@ const LayersPanel: React.FC<{
   onUpdate,
   onDelete,
   onReorder,
+  isMobile = false,
+  displacementSettings,
+  onDisplacementSettingsChange,
+  onDesignUpload,
+  PX_PER_INCH = 96,
+  canvasPadding = 0,
 }) => {
+    const elementsByPlaceholder = useMemo(() => {
+      const grouped: Record<string, CanvasElement[]> = {};
+      elements.forEach(el => {
+        const pid = el.placeholderId || 'unassigned';
+        if (!grouped[pid]) grouped[pid] = [];
+        grouped[pid].push(el);
+      });
+      return grouped;
+    }, [elements]);
+
     const displayedElements = selectedPlaceholderId
       ? elements.filter(e => e.placeholderId === selectedPlaceholderId)
-      : elements;
+      : isMobile
+        ? elements.filter(e => !e.placeholderId) // On mobile, only show unassigned elements in the main list
+        : elements;
 
     return (
       <div className="space-y-4">
@@ -6032,115 +6018,155 @@ const LayersPanel: React.FC<{
           <div className="space-y-2">
             <Label className="text-sm font-semibold uppercase text-muted-foreground">Placeholders</Label>
             <div className="space-y-2">
-              {placeholders.map((placeholder) => {
-                const designUrl = designUrlsByPlaceholder[placeholder.id];
-                const isSelected = selectedPlaceholderId === placeholder.id;
-                const baseColor = placeholder.original.color || '#f472b6';
+              <Accordion type="single" collapsible className="space-y-2">
+                {placeholders.map((placeholder) => {
+                  const designUrl = designUrlsByPlaceholder[placeholder.id];
+                  const isSelected = selectedPlaceholderId === placeholder.id;
+                  const baseColor = placeholder.original.color || '#f472b6';
 
-                return (
-                  <div
-                    key={placeholder.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted'
-                      }`}
-                    onClick={() => onSelectPlaceholder(placeholder.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div
-                          className="w-8 h-8 rounded border flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: `${baseColor}40`, borderColor: baseColor }}
-                        >
-                          {designUrl ? (
-                            <img src={designUrl} alt="Design" className="w-full h-full object-contain rounded" />
-                          ) : (
-                            <Square className="w-4 h-4" style={{ color: baseColor }} />
+                  return (
+                    <AccordionItem
+                      key={placeholder.id}
+                      value={placeholder.id}
+                      className="border rounded-lg px-3 overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between">
+                        {isMobile ? (
+                          <AccordionTrigger
+                            className="flex-1 py-3 px-0 hover:no-underline"
+                            onClick={() => onSelectPlaceholder(placeholder.id)}
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                              <div
+                                className="w-8 h-8 rounded border flex items-center justify-center flex-shrink-0"
+                                style={{ backgroundColor: `${baseColor}40`, borderColor: baseColor }}
+                              >
+                                {designUrl ? (
+                                  <img src={designUrl} alt="Design" className="w-full h-full object-contain rounded" />
+                                ) : (
+                                  <Square className="w-4 h-4" style={{ color: baseColor }} />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  {placeholder.original.name || `Placeholder ${placeholder.id.slice(0, 8)}`}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {placeholder.original.widthIn.toFixed(1)}" × {placeholder.original.heightIn.toFixed(1)}"
+                                  {designUrl && ' • Design'}
+                                </p>
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                        ) : (
+                          <div
+                            className="flex items-center gap-2 flex-1 min-w-0 py-3 cursor-pointer"
+                            onClick={() => onSelectPlaceholder(placeholder.id)}
+                          >
+                            <div
+                              className="w-8 h-8 rounded border flex items-center justify-center flex-shrink-0"
+                              style={{ backgroundColor: `${baseColor}40`, borderColor: baseColor }}
+                            >
+                              {designUrl ? (
+                                <img src={designUrl} alt="Design" className="w-full h-full object-contain rounded" />
+                              ) : (
+                                <Square className="w-4 h-4" style={{ color: baseColor }} />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {placeholder.original.name || `Placeholder ${placeholder.id.slice(0, 8)}`}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {placeholder.original.widthIn.toFixed(1)}" × {placeholder.original.heightIn.toFixed(1)}"
+                                {designUrl && ' • Design'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          {!isMobile && designUrl && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDesignRemove(placeholder.id);
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">
-                            {placeholder.original.name || `Placeholder ${placeholder.id.slice(0, 8)}`}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {placeholder.original.widthIn.toFixed(1)}" × {placeholder.original.heightIn.toFixed(1)}"
-                            {designUrl && ' • Design'}
-                          </p>
-                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        {designUrl && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDesignRemove(placeholder.id);
-                            }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
-        {/* Canvas Elements Section */}
-        {elements.length > 0 && (
-          <div className="space-y-2 border-t pt-4">
-            <Label className="text-sm font-semibold uppercase text-muted-foreground">
-              Canvas Elements {selectedPlaceholderId ? '(Filtered)' : ''}
-            </Label>
-            <div className="space-y-2">
-              {displayedElements
-                .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
-                .map((element) => (
-                  <div
-                    key={element.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedIds.includes(element.id) ? 'border-primary bg-primary/5' : 'hover:bg-muted'
-                      }`}
-                    onClick={() => onSelectElement(element.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {element.type === 'image' && <ImageIcon className="w-4 h-4 flex-shrink-0" />}
-                        {element.type === 'text' && <Type className="w-4 h-4 flex-shrink-0" />}
-                        {element.type === 'shape' && <Square className="w-4 h-4 flex-shrink-0" />}
-                        <span className="text-sm font-medium truncate">
-                          {element.type === 'text' ? (element.text || 'Text') : (element.name || (element.type === 'image' ? 'Image' : element.shapeType || 'Shape'))}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdate(element.id, { visible: element.visible !== false ? false : true });
-                          }}
-                        >
-                          {element.visible !== false ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete(element.id);
-                          }}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                      <AccordionContent className="pt-2 border-t mt-1">
+                        {isMobile && elementsByPlaceholder[placeholder.id]?.length > 0 && (
+                          <div className="mb-4 space-y-2">
+                            <Accordion type="single" collapsible className="space-y-1">
+                              {elementsByPlaceholder[placeholder.id]
+                                .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
+                                .map((element) => (
+                                  <AccordionItem key={element.id} value={element.id} className="border rounded-md px-0 overflow-hidden bg-muted/20">
+                                    <AccordionTrigger
+                                      className="py-2 px-3 hover:no-underline text-left"
+                                      onClick={() => onSelectElement(element.id)}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        {element.type === 'image' && <ImageIcon className="w-3.5 h-3.5 flex-shrink-0" />}
+                                        {element.type === 'text' && <Type className="w-3.5 h-3.5 flex-shrink-0" />}
+                                        {element.type === 'shape' && <Square className="w-3.5 h-3.5 flex-shrink-0" />}
+                                        <span className="text-xs font-medium truncate">
+                                          {element.type === 'text' ? (element.text || 'Text') : (element.name || (element.type === 'image' ? 'Image' : element.shapeType || 'Shape'))}
+                                        </span>
+                                      </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pt-1 border-t px-3 pb-3">
+                                      <PropertiesPanel
+                                        selectedPlaceholderId={null}
+                                        placeholders={placeholders}
+                                        designUrlsByPlaceholder={designUrlsByPlaceholder}
+                                        onDesignUpload={() => { }}
+                                        onDesignRemove={() => { }}
+                                        displacementSettings={displacementSettings || { scaleX: 10, scaleY: 10, contrastBoost: 1.5 }}
+                                        onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
+                                        selectedElementIds={[element.id]}
+                                        elements={elements}
+                                        onElementUpdate={(updates) => onUpdate(element.id, updates)}
+                                        onElementDelete={onDelete}
+                                        PX_PER_INCH={PX_PER_INCH}
+                                        canvasPadding={canvasPadding}
+                                      />
+                                    </AccordionContent>
+                                  </AccordionItem>
+                                ))}
+                            </Accordion>
+                          </div>
+                        )}
+
+                        <div className={isMobile && elementsByPlaceholder[placeholder.id]?.length > 0 ? "pt-4 border-t" : ""}>
+                          <PropertiesPanel
+                            selectedPlaceholderId={placeholder.id}
+                            placeholders={placeholders}
+                            designUrlsByPlaceholder={designUrlsByPlaceholder}
+                            onDesignUpload={onDesignUpload || (() => { })}
+                            onDesignRemove={onDesignRemove}
+                            displacementSettings={displacementSettings || { scaleX: 10, scaleY: 10, contrastBoost: 1.5 }}
+                            onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
+                            selectedElementIds={[]}
+                            elements={elements}
+                            onElementUpdate={() => { }}
+                            onElementDelete={() => { }}
+                            PX_PER_INCH={PX_PER_INCH}
+                            canvasPadding={canvasPadding}
+                          />
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
             </div>
           </div>
         )}
