@@ -114,31 +114,35 @@ const StoreLayout: React.FC<StoreLayoutProps> = ({ children, store: propStore, p
     const builderHeader = getBuilderSection('header');
     const builderFooter = getBuilderSection('footer');
 
+    const isAuthPage = location.pathname.endsWith('/auth');
+
     return (
         <div className="min-h-screen bg-background flex flex-col">
             {/* Header */}
-            {builderHeader ? (
-                <SectionRenderer
-                    section={builderHeader}
-                    products={products}
-                    globalStyles={store.builder!.globalStyles}
-                    isPreview={false}
-                    storeSlug={store.subdomain}
-                />
-            ) : (
-                <EnhancedStoreHeader
-                    storeName={store.storeName}
-                    storeSlug={store.subdomain}
-                    navLinks={[
-                        { name: 'Products', href: buildStorePath('/products', store.subdomain) },
-                        { name: 'About', href: buildStorePath('/', store.subdomain) + '#about' },
-                        { name: 'Contact', href: '/support/contact-us' },
-                    ]}
-                    cartItemCount={cartCount}
-                    onCartClick={() => setIsCartOpen(true)}
-                    onSearchClick={onSearchClick}
-                    primaryColor={primaryColor}
-                />
+            {!isAuthPage && (
+                builderHeader ? (
+                    <SectionRenderer
+                        section={builderHeader}
+                        products={products}
+                        globalStyles={store.builder!.globalStyles}
+                        isPreview={false}
+                        storeSlug={store.subdomain}
+                    />
+                ) : (
+                    <EnhancedStoreHeader
+                        storeName={store.storeName}
+                        storeSlug={store.subdomain}
+                        navLinks={[
+                            { name: 'Products', href: buildStorePath('/products', store.subdomain) },
+                            { name: 'About', href: buildStorePath('/', store.subdomain) + '#about' },
+                            { name: 'Contact', href: '/support/contact-us' },
+                        ]}
+                        cartItemCount={cartCount}
+                        onCartClick={() => setIsCartOpen(true)}
+                        onSearchClick={onSearchClick}
+                        primaryColor={primaryColor}
+                    />
+                )
             )}
 
             {/* Main Content */}
@@ -147,20 +151,22 @@ const StoreLayout: React.FC<StoreLayoutProps> = ({ children, store: propStore, p
             </main>
 
             {/* Footer */}
-            {builderFooter ? (
-                <SectionRenderer
-                    section={builderFooter}
-                    products={products}
-                    globalStyles={store.builder!.globalStyles}
-                    isPreview={false}
-                    storeSlug={store.subdomain}
-                />
-            ) : (
-                <EnhancedFooter
-                    storeName={store.storeName}
-                    description={store.description || 'Premium custom merchandise'}
-                    storeSlug={store.subdomain}
-                />
+            {!isAuthPage && (
+                builderFooter ? (
+                    <SectionRenderer
+                        section={builderFooter}
+                        products={products}
+                        globalStyles={store.builder!.globalStyles}
+                        isPreview={false}
+                        storeSlug={store.subdomain}
+                    />
+                ) : (
+                    <EnhancedFooter
+                        storeName={store.storeName}
+                        description={store.description || 'Premium custom merchandise'}
+                        storeSlug={store.subdomain}
+                    />
+                )
             )}
 
             {/* Global Cart Drawer */}

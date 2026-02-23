@@ -11,10 +11,10 @@ const HeroSection = () => {
           {/* Left Content */}
           <div className="space-y-6">
             <h1 className="text-4xl md:text-4xl lg:text-5xl font-bold leading-tight text-foreground">
-              Driving Globalll E-commerce with Locally Produced, Print-On-Demand Products
+              Driving Global E-commerce with Locally Produced, Print-On-Demand Products
             </h1>
             <p className="text-base text-foreground max-w-xl">
-              Designnn, sell, and scale your brand effortlessly with Shelf Merch's powerful print-on-demand platform. Custom merchandise, global delivery, zero upfront costs
+              Design, sell, and scale your brand effortlessly with Shelf Merch's powerful print-on-demand platform. Custom merchandise, global delivery, zero upfront costs
             </p>
             <div className="flex flex-wrap gap-4">
               <Link to="/auth">
