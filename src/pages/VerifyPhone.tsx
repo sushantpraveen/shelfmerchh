@@ -19,8 +19,14 @@ const VerifyPhone: React.FC = () => {
     const locationState = (location.state || {}) as {
         returnTo?: string;
         triggerPublish?: boolean;
+        from?: string;
     };
     const [isLoading, setIsLoading] = useState(false);
+
+    // Detect if verification is mandatory
+    const searchParams = new URLSearchParams(location.search);
+    const sourceParam = searchParams.get('source');
+    const isMandatory = sourceParam === 'add-product' || locationState.from === 'add-product' || locationState.triggerPublish;
 
     const handleSendOtp = async () => {
         // Basic phone validation (digits only, at least 10 chars)
@@ -99,7 +105,7 @@ const VerifyPhone: React.FC = () => {
                 <div className="flex flex-col items-center mb-8">
                     <img src={logo} alt="ShelfMerch Logo" className="h-12 mb-6" />
                     <h2 className="text-2xl font-bold text-black text-center">Verify Your Phone</h2>
-                    {locationState.triggerPublish && (
+                    {isMandatory && (
                         <p className="mt-3 text-sm text-center text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">
                             ✅ Almost there! Phone verification is required to <strong>Add Product</strong>. Your design is saved.
                         </p>
@@ -167,14 +173,16 @@ const VerifyPhone: React.FC = () => {
                     </div>
                 )}
 
-                <div className="mt-8 flex justify-center">
-                    <button
-                        onClick={() => navigate(locationState.returnTo || '/dashboard')}
-                        className="text-gray-400 text-sm hover:text-gray-600 transition-colors"
-                    >
-                        Skip for now
-                    </button>
-                </div>
+                {!isMandatory && (
+                    <div className="mt-8 flex justify-center">
+                        <button
+                            onClick={() => navigate(locationState.returnTo || '/dashboard')}
+                            className="text-gray-400 text-sm hover:text-gray-600 transition-colors"
+                        >
+                            Skip for now
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

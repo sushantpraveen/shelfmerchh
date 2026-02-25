@@ -2566,11 +2566,12 @@ const DesignEditor: React.FC = () => {
         // Both unverified — go to email first, then phone
         saveDesignStateForVerification();
         toast.info('Please verify your email and phone before adding a product.');
-        navigate('/verify-email', {
+        navigate('/verify-email?source=add-product', {
           state: {
             returnTo: `/designer/${id}`,
             nextVerification: 'phone', // after email, chain to phone
             triggerPublish: true,
+            from: 'add-product'
           },
         });
         return;
@@ -2579,10 +2580,11 @@ const DesignEditor: React.FC = () => {
       if (!user.isEmailVerified) {
         saveDesignStateForVerification();
         toast.info('Please verify your email to continue.');
-        navigate('/verify-email', {
+        navigate('/verify-email?source=add-product', {
           state: {
             returnTo: `/designer/${id}`,
             triggerPublish: true,
+            from: 'add-product'
           },
         });
         return;
@@ -2591,10 +2593,11 @@ const DesignEditor: React.FC = () => {
       if (!user.isPhoneVerified) {
         saveDesignStateForVerification();
         toast.info('Please verify your phone number to continue.');
-        navigate('/verify-phone', {
+        navigate('/verify-phone?source=add-product', {
           state: {
             returnTo: `/designer/${id}`,
             triggerPublish: true,
+            from: 'add-product'
           },
         });
         return;
@@ -6716,7 +6719,8 @@ const ShapesPanel: React.FC<{
   selectedPlaceholderId: string | null;
   selectedPlaceholderName?: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
-}> = ({ onAddShape, onAddAsset, selectedPlaceholderId, selectedPlaceholderName, placeholders }) => {
+  isMobile?: boolean;
+}> = ({ onAddShape, onAddAsset, selectedPlaceholderId, selectedPlaceholderName, placeholders, isMobile = false }) => {
   const [shapeAssets, setShapeAssets] = useState<any[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
 

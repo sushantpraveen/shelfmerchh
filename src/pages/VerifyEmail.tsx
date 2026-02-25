@@ -60,10 +60,11 @@ const VerifyEmail: React.FC = () => {
 
         // If phone also needs verification, chain to /verify-phone
         if (locationState.nextVerification === 'phone') {
-          navigate('/verify-phone', {
+          navigate(locationState.triggerPublish ? '/verify-phone?source=add-product' : '/verify-phone', {
             state: {
               returnTo: locationState.returnTo,
               triggerPublish: locationState.triggerPublish,
+              from: locationState.triggerPublish ? 'add-product' : undefined
             },
           });
         } else if (locationState.returnTo) {
@@ -100,13 +101,18 @@ const VerifyEmail: React.FC = () => {
     }
   };
 
+  // Detect if verification is mandatory
+  const searchParams = new URLSearchParams(location.search);
+  const sourceParam = searchParams.get('source');
+  const isMandatory = sourceParam === 'add-product' || (location.state as any)?.from === 'add-product' || locationState.triggerPublish;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="max-w-md w-full p-8 border border-gray-100 rounded-2xl shadow-sm">
         <div className="flex flex-col items-center mb-8">
           <img src={logo} alt="ShelfMerch Logo" className="h-12 mb-6" />
           <h2 className="text-2xl font-bold text-black text-center">Verify Your Email</h2>
-          {locationState.triggerPublish && (
+          {isMandatory && (
             <p className="mt-3 text-sm text-center text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">
               ✅ Verification required to <strong>Add Product</strong>. Your design is saved — you'll return automatically after verifying.
             </p>
@@ -174,14 +180,16 @@ const VerifyEmail: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-8 flex justify-center">
-          <button
-            onClick={() => navigate(locationState.returnTo || '/dashboard')}
-            className="text-gray-400 text-sm hover:text-gray-600 transition-colors"
-          >
-            Skip for now
-          </button>
-        </div>
+        {!isMandatory && (
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={() => navigate(locationState.returnTo || '/dashboard')}
+              className="text-gray-400 text-sm hover:text-gray-600 transition-colors"
+            >
+              Skip for now
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
