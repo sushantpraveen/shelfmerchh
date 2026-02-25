@@ -34,7 +34,7 @@ import {
   Lock, Unlock, AlignLeft, AlignCenter, AlignRight, Bold, Italic,
   Underline, Palette, Grid, Ruler, Download, Settings, Settings2, ChevronRight,
   ChevronLeft, Maximize2, Minimize2, RotateCw, Square, Circle as CircleIcon, Triangle, Sparkles as SparklesIcon, Wand2,
-  Heart, Star as StarIcon, ArrowRight, Search, Filter, SortAsc, FolderOpen, ArrowLeft, ArrowUp, ArrowDown, Pen, Camera, Layout
+  Heart, Star as StarIcon, ArrowRight, Search, Filter, SortAsc, FolderOpen, ArrowLeft, ArrowUp, ArrowDown, Pen, Camera, Layout, Hand
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { productApi, storeApi, storeProductsApi } from '@/lib/api';
@@ -225,12 +225,27 @@ const DesignEditor: React.FC = () => {
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [stageSize, setStageSize] = useState({ width: 800, height: 1000 });
 
+  // Keyboard shortcut for escaping selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedIds([]);
+        setSelectedPlaceholderId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Tool state
-  const [activeTool, setActiveTool] = useState<'select' | 'text' | 'upload' | 'graphics' | 'patterns' | 'logos' | 'ai' | 'library' | 'shapes' | 'templates'>('select');
+  const [activeTool, setActiveTool] = useState<'upload' | 'text' | 'shapes' | 'graphics' | 'patterns' | 'logos' | 'library' | 'templates' | 'select' | 'move' | 'crop' | 'erase' | 'ai'>('select');
   const [textInput, setTextInput] = useState('');
   const [selectedFont, setSelectedFont] = useState('Arial');
   const [fontSize, setFontSize] = useState(24);
   const [textColor, setTextColor] = useState('#000000');
+  const [selectionBox, setSelectionBox] = useState<{ x1: number; y1: number; x2: number; y2: number; active: boolean } | null>(null);
+  const selectionStartPos = useRef<{ x: number; y: number } | null>(null);
+  const initialSelectedIdsRef = useRef<string[]>([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [showRightPanel, setShowRightPanel] = useState(window.innerWidth >= 1024);
   const [showLeftPanel, setShowLeftPanel] = useState(window.innerWidth >= 1024);
@@ -290,14 +305,24 @@ const DesignEditor: React.FC = () => {
       };
     } else if (e.touches.length === 1) {
       const t = e.touches[0];
-      touchStateRef.current = {
-        ...touchStateRef.current,
-        lastPos: { x: t.clientX, y: t.clientY },
-        isPinching: false,
-        isPanning: true
-      };
+
+      if (activeTool === 'move') {
+        touchStateRef.current = {
+          ...touchStateRef.current,
+          lastPos: { x: t.clientX, y: t.clientY },
+          isPinching: false,
+          isPanning: true
+        };
+      } else {
+        // Selection box start will be handled on Stage for better coordinate precision
+        touchStateRef.current = {
+          ...touchStateRef.current,
+          isPinching: false,
+          isPanning: false
+        };
+      }
     }
-  }, [isMobile]);
+  }, [isMobile, activeTool]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isMobile) return;
@@ -312,7 +337,7 @@ const DesignEditor: React.FC = () => {
         setZoom(prev => Math.min(500, Math.max(10, prev * scaleChange)));
         touchStateRef.current.distance = dist;
       }
-    } else if (e.touches.length === 1 && touchStateRef.current.isPanning) {
+    } else if (e.touches.length === 1 && touchStateRef.current.isPanning && activeTool === 'move') {
       const t = e.touches[0];
       const dx = t.clientX - touchStateRef.current.lastPos.x;
       const dy = t.clientY - touchStateRef.current.lastPos.y;
@@ -324,7 +349,7 @@ const DesignEditor: React.FC = () => {
 
       touchStateRef.current.lastPos = { x: t.clientX, y: t.clientY };
     }
-  }, [isMobile, zoom]);
+  }, [isMobile, zoom, activeTool]);
 
   const handleTouchEnd = useCallback(() => {
     touchStateRef.current.isPinching = false;
@@ -1116,6 +1141,41 @@ const DesignEditor: React.FC = () => {
     };
   }, [placeholders, stageSize]);
 
+  // Calculate style for the mobile selection toolbar to position it above the selected element
+  const mobileToolbarStyle = useMemo(() => {
+    if (!isMobile || selectedIds.length !== 1 || previewMode) {
+      return { top: '1rem', left: '50%', transform: 'translateX(-50%)' };
+    }
+
+    const element = elements.find(el => el.id === selectedIds[0]);
+    if (!element) return { top: '1rem', left: '50%', transform: 'translateX(-50%)' };
+
+    const bounds = calculateRotatedBounds(element.x, element.y, element.width || 0, element.height || 0, element.rotation || 0);
+
+    // Position 80px above the top of the element, or below if near the top edge
+    let topPx = bounds.minY - 100;
+    if (topPx < 40) {
+      topPx = bounds.maxY + 40;
+    }
+
+    // Center horizontally relative to element
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+
+    // Ensure it doesn't go off screen
+    const padding = 20;
+    const safeLeft = Math.max(padding, Math.min(centerX, stageSize.width - padding));
+
+    return {
+      position: 'absolute' as const,
+      top: `${(topPx / stageSize.height) * 100}%`,
+      left: `${(safeLeft / stageSize.width) * 100}%`,
+      transform: 'translate(-50%, -50%)',
+      zIndex: 40,
+      width: '90%',
+      maxWidth: '400px'
+    };
+  }, [isMobile, selectedIds, elements, stageSize, previewMode]);
+
   // Available views from product
   const availableViews = useMemo(() => {
     if (!product?.design?.views) return [];
@@ -1840,7 +1900,7 @@ const DesignEditor: React.FC = () => {
         setShowRightPanel(true);
       }
 
-      toast.success('Image added to canvas');
+      // toast.success('Image added to canvas');
     };
     img.onerror = () => {
       toast.error('Failed to load image');
@@ -1987,7 +2047,7 @@ const DesignEditor: React.FC = () => {
       placeholderId: targetPlaceholder.id
     });
     setTextInput('');
-    toast.success('Text added');
+    // toast.success('Text added');
   };
 
   // Add text with params (for new TextPanel)
@@ -2039,7 +2099,7 @@ const DesignEditor: React.FC = () => {
       setShowRightPanel(true);
     }
 
-    toast.success('Text added');
+    // toast.success('Text added');
   };
 
   // Add shape
@@ -2562,7 +2622,7 @@ const DesignEditor: React.FC = () => {
               name: defaultData.name,
               description: 'My first store'
             });
-            toast.success('Default store created automatically.');
+            // toast.success('Default store created automatically.');
           } catch (err) {
             console.error('Failed to create default store:', err);
             // Persist current design state so it can be restored after creating a store
@@ -3028,9 +3088,9 @@ const DesignEditor: React.FC = () => {
             open={isMobileMenuOpen}
             onOpenChange={setIsMobileMenuOpen}
             modal={false}
-            snapPoints={[0.66, 0.8]}
+            snapPoints={[0.97]}
           >
-            <DrawerContent className="min-h-[66vh]" showOverlay={false}>
+            <DrawerContent className="h-[80vh] flex flex-col" showOverlay={false}>
               <DrawerHeader className="text-left border-b pb-4">
                 <div className="flex items-center justify-between">
                   <DrawerTitle>
@@ -3045,7 +3105,7 @@ const DesignEditor: React.FC = () => {
               </DrawerHeader>
 
               {mobileToolStage === 'menu' ? (
-                <div className="flex-1 overflow-y-auto p-6 bg-muted/5">
+                <div className="flex-1 overflow-y-auto p-6 bg-muted/5 min-h-0">
                   <div className="grid grid-cols-2 gap-4">
                     {tools.map((tool) => (
                       <button
@@ -3065,7 +3125,7 @@ const DesignEditor: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 overflow-hidden flex flex-col bg-background">
+                <div className="flex-1 flex flex-col bg-background min-h-0 overflow-hidden">
                   <div className="border-b bg-muted/5 overflow-x-auto no-scrollbar flex-shrink-0">
                     <div className="flex items-center p-3 gap-3 min-w-max px-4">
                       <Button
@@ -3092,7 +3152,7 @@ const DesignEditor: React.FC = () => {
                     </div>
                   </div>
 
-                  <ScrollArea className="flex-1 no-scrollbar">
+                  <div className="flex-1 overflow-hidden h-full flex flex-col">
                     {activeTool === 'upload' && (
                       <UploadPanel
                         onFileUpload={handleFileUpload}
@@ -3100,6 +3160,7 @@ const DesignEditor: React.FC = () => {
                         imagePreview={uploadedImagePreview}
                         onImageClick={addImageToCanvas}
                         selectedPlaceholderId={selectedPlaceholderId}
+                        selectedPlaceholderName={selectedPlaceholderId ? placeholders.find(p => p.id === selectedPlaceholderId)?.original?.name || null : null}
                         placeholders={placeholders.map(p => ({
                           id: p.id,
                           x: p.x,
@@ -3116,46 +3177,65 @@ const DesignEditor: React.FC = () => {
                         onClose={() => setIsMobileMenuOpen(false)}
                       />
                     )}
-                    {activeTool === 'shapes' && (
-                      <ShapesPanel
-                        onAddShape={handleAddShape}
-                        onAddAsset={addImageToCanvas}
-                        selectedPlaceholderId={selectedPlaceholderId}
-                        placeholders={placeholders}
-                      />
-                    )}
-                    {activeTool === 'library' && (
-                      <LibraryPanel
-                        onAddAsset={addImageToCanvas}
-                        selectedPlaceholderId={selectedPlaceholderId}
-                        placeholders={placeholders}
-                      />
-                    )}
-                    {activeTool === 'graphics' && (
-                      <GraphicsPanel
-                        onAddAsset={addImageToCanvas}
-                        selectedPlaceholderId={selectedPlaceholderId}
-                        placeholders={placeholders}
-                      />
-                    )}
-                    {activeTool === 'patterns' && (
-                      <AssetPanel
-                        onAddAsset={addImageToCanvas}
-                        category="patterns"
-                        title="Patterns"
-                        selectedPlaceholderId={selectedPlaceholderId}
-                        placeholders={placeholders}
-                      />
-                    )}
-                    {activeTool === 'logos' && (
-                      <LogosPanel
-                        onAddAsset={addImageToCanvas}
-                        selectedPlaceholderId={selectedPlaceholderId}
-                        placeholders={placeholders}
-                      />
-                    )}
-                    {activeTool === 'templates' && <TemplatesPanel />}
-                  </ScrollArea>
+                    {(() => {
+                      const selectedPlaceholderName = selectedPlaceholderId
+                        ? placeholders.find(p => p.id === selectedPlaceholderId)?.original?.name || null
+                        : null;
+                      return (
+                        <>
+                          {activeTool === 'shapes' && (
+                            <ShapesPanel
+                              onAddShape={handleAddShape}
+                              onAddAsset={addImageToCanvas}
+                              selectedPlaceholderId={selectedPlaceholderId}
+                              selectedPlaceholderName={selectedPlaceholderName}
+                              placeholders={placeholders}
+                              isMobile={true}
+                            />
+                          )}
+                          {activeTool === 'library' && (
+                            <LibraryPanel
+                              onAddAsset={addImageToCanvas}
+                              selectedPlaceholderId={selectedPlaceholderId}
+                              selectedPlaceholderName={selectedPlaceholderName}
+                              placeholders={placeholders}
+                              isMobile={true}
+                            />
+                          )}
+                          {activeTool === 'graphics' && (
+                            <GraphicsPanel
+                              onAddAsset={addImageToCanvas}
+                              selectedPlaceholderId={selectedPlaceholderId}
+                              selectedPlaceholderName={selectedPlaceholderName}
+                              placeholders={placeholders}
+                              isMobile={true}
+                            />
+                          )}
+                          {activeTool === 'patterns' && (
+                            <AssetPanel
+                              onAddAsset={addImageToCanvas}
+                              category="patterns"
+                              title="Patterns"
+                              selectedPlaceholderId={selectedPlaceholderId}
+                              selectedPlaceholderName={selectedPlaceholderName}
+                              placeholders={placeholders}
+                              isMobile={true}
+                            />
+                          )}
+                          {activeTool === 'logos' && (
+                            <LogosPanel
+                              onAddAsset={addImageToCanvas}
+                              selectedPlaceholderId={selectedPlaceholderId}
+                              selectedPlaceholderName={selectedPlaceholderName}
+                              placeholders={placeholders}
+                              isMobile={true}
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
+                    {activeTool === 'templates' && <TemplatesPanel isMobile={true} />}
+                  </div>
                 </div>
               )}
             </DrawerContent>
@@ -3174,6 +3254,7 @@ const DesignEditor: React.FC = () => {
                   // Add uploaded images to canvas like other asset panels
                   onImageClick={addImageToCanvas}
                   selectedPlaceholderId={selectedPlaceholderId}
+                  selectedPlaceholderName={selectedPlaceholderId ? placeholders.find(p => p.id === selectedPlaceholderId)?.original?.name || null : null}
                   placeholders={placeholders.map(p => ({
                     id: p.id,
                     x: p.x,
@@ -3192,44 +3273,58 @@ const DesignEditor: React.FC = () => {
                   onClose={() => setShowLeftPanel(false)}
                 />
               )}
-              {activeTool === 'shapes' && (
-                <ShapesPanel
-                  onAddShape={handleAddShape}
-                  onAddAsset={addImageToCanvas}
-                  selectedPlaceholderId={selectedPlaceholderId}
-                  placeholders={placeholders}
-                />
-              )}
-              {activeTool === 'library' && (
-                <LibraryPanel
-                  onAddAsset={addImageToCanvas}
-                  selectedPlaceholderId={selectedPlaceholderId}
-                  placeholders={placeholders}
-                />
-              )}
-              {activeTool === 'graphics' && (
-                <GraphicsPanel
-                  onAddAsset={addImageToCanvas}
-                  selectedPlaceholderId={selectedPlaceholderId}
-                  placeholders={placeholders}
-                />
-              )}
-              {activeTool === 'patterns' && (
-                <AssetPanel
-                  onAddAsset={addImageToCanvas}
-                  category="patterns"
-                  title="Patterns"
-                  selectedPlaceholderId={selectedPlaceholderId}
-                  placeholders={placeholders}
-                />
-              )}
-              {activeTool === 'logos' && (
-                <LogosPanel
-                  onAddAsset={addImageToCanvas}
-                  selectedPlaceholderId={selectedPlaceholderId}
-                  placeholders={placeholders}
-                />
-              )}
+              {(() => {
+                const selectedPlaceholderName = selectedPlaceholderId
+                  ? placeholders.find(p => p.id === selectedPlaceholderId)?.original?.name || null
+                  : null;
+                return (
+                  <>
+                    {activeTool === 'shapes' && (
+                      <ShapesPanel
+                        onAddShape={handleAddShape}
+                        onAddAsset={addImageToCanvas}
+                        selectedPlaceholderId={selectedPlaceholderId}
+                        selectedPlaceholderName={selectedPlaceholderName}
+                        placeholders={placeholders}
+                      />
+                    )}
+                    {activeTool === 'library' && (
+                      <LibraryPanel
+                        onAddAsset={addImageToCanvas}
+                        selectedPlaceholderId={selectedPlaceholderId}
+                        selectedPlaceholderName={selectedPlaceholderName}
+                        placeholders={placeholders}
+                      />
+                    )}
+                    {activeTool === 'graphics' && (
+                      <GraphicsPanel
+                        onAddAsset={addImageToCanvas}
+                        selectedPlaceholderId={selectedPlaceholderId}
+                        selectedPlaceholderName={selectedPlaceholderName}
+                        placeholders={placeholders}
+                      />
+                    )}
+                    {activeTool === 'patterns' && (
+                      <AssetPanel
+                        onAddAsset={addImageToCanvas}
+                        category="patterns"
+                        title="Patterns"
+                        selectedPlaceholderId={selectedPlaceholderId}
+                        selectedPlaceholderName={selectedPlaceholderName}
+                        placeholders={placeholders}
+                      />
+                    )}
+                    {activeTool === 'logos' && (
+                      <LogosPanel
+                        onAddAsset={addImageToCanvas}
+                        selectedPlaceholderId={selectedPlaceholderId}
+                        selectedPlaceholderName={selectedPlaceholderName}
+                        placeholders={placeholders}
+                      />
+                    )}
+                  </>
+                );
+              })()}
               {activeTool === 'templates' && (
                 <TemplatesPanel />
               )}
@@ -3349,7 +3444,7 @@ const DesignEditor: React.FC = () => {
                         console.log('Placeholder selected via WebGL:', id);
                         setSelectedPlaceholderId(id);
                         selectedPlaceholderIdRef.current = id;
-                        toast.info(`Placeholder ${id.slice(0, 8)}... selected`);
+                        // toast.info(`Placeholder ${id.slice(0, 8)}... selected`);
                       } else {
                         setSelectedPlaceholderId(null);
                         selectedPlaceholderIdRef.current = null;
@@ -3375,8 +3470,121 @@ const DesignEditor: React.FC = () => {
                       width={stageSize.width}
                       height={stageSize.height}
                       onMouseDown={(e: any) => {
-                        const clickedOnEmpty = e.target === e.target.getStage();
-                        if (clickedOnEmpty) {
+                        const isBackground = e.target === e.target.getStage() || e.target.attrs.isPlaceholder || e.target.getType() === 'Layer';
+
+                        if (activeTool === 'select') {
+                          const pos = e.target.getStage().getRelativePointerPosition();
+                          // Marquee selection starts if we hit the background, a placeholder, or something that's not a design element
+                          const targetType = e.target.attrs.type;
+                          const isDesignElement = targetType === 'image' || targetType === 'text' || targetType === 'shape';
+
+                          if (isBackground || !isDesignElement) {
+                            selectionStartPos.current = pos;
+                            setSelectionBox({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y, active: true });
+
+                            // For multi-selection support
+                            if (e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey) {
+                              initialSelectedIdsRef.current = [...selectedIds];
+                            } else {
+                              initialSelectedIdsRef.current = [];
+                              setSelectedIds([]);
+                            }
+                          }
+
+                          if (isBackground) {
+                            if (!e.evt.shiftKey && !e.evt.ctrlKey && !e.evt.metaKey) {
+                              setSelectedIds([]);
+                            }
+                            if (isMobile) {
+                              setShowRightPanel(false);
+                              setIsMobileMenuOpen(false);
+                            }
+                          }
+                        } else if (isBackground) {
+                          setSelectedIds([]);
+                        }
+                      }}
+                      onMouseMove={(e: any) => {
+                        if (!selectionBox || !selectionBox.active) return;
+                        const stage = e.target.getStage();
+                        const pos = stage.getRelativePointerPosition();
+
+                        const newX1 = selectionBox.x1;
+                        const newY1 = selectionBox.y1;
+                        const newX2 = pos.x;
+                        const newY2 = pos.y;
+
+                        setSelectionBox(prev => prev ? { ...prev, x2: newX2, y2: newY2 } : null);
+
+                        // Real-time highlight logic
+                        const rect = {
+                          minX: Math.min(newX1, newX2),
+                          maxX: Math.max(newX1, newX2),
+                          minY: Math.min(newY1, newY2),
+                          maxY: Math.max(newY1, newY2)
+                        };
+
+                        const intersectedIds: string[] = [];
+                        elements.forEach(el => {
+                          if ((el.view && el.view !== currentView) || el.visible === false) return;
+
+                          const elBounds = calculateRotatedBounds(el.x, el.y, el.width || 0, el.height || 0, el.rotation || 0);
+
+                          // Intersection check
+                          if (!(elBounds.minX > rect.maxX ||
+                            elBounds.maxX < rect.minX ||
+                            elBounds.minY > rect.maxY ||
+                            elBounds.maxY < rect.minY)) {
+                            intersectedIds.push(el.id);
+                          }
+                        });
+
+                        // Combine with initial selection if modifier is held
+                        if (e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey) {
+                          const combined = [...new Set([...initialSelectedIdsRef.current, ...intersectedIds])];
+                          // Only update if changed to avoid unnecessary re-renders
+                          if (combined.length !== selectedIds.length || !combined.every(id => selectedIds.includes(id))) {
+                            setSelectedIds(combined);
+                          }
+                        } else {
+                          if (intersectedIds.length !== selectedIds.length || !intersectedIds.every(id => selectedIds.includes(id))) {
+                            setSelectedIds(intersectedIds);
+                          }
+                        }
+                      }}
+                      onMouseUp={(e: any) => {
+                        if (!selectionBox || !selectionBox.active) return;
+
+                        // Final selection check is already handled by onMouseMove
+                        // But we open the panel on desktop if selection is non-empty
+                        if (selectedIds.length > 0 && !isMobile) {
+                          setRightPanelTab('properties');
+                        }
+
+                        setSelectionBox(null);
+                        initialSelectedIdsRef.current = [];
+                      }}
+                      onTouchStart={(e: any) => {
+                        const isBackground = e.target === e.target.getStage() || e.target.attrs.isPlaceholder || e.target.getType() === 'Layer';
+
+                        if (activeTool === 'select' && e.evt.touches.length === 1) {
+                          const pos = e.target.getStage().getRelativePointerPosition();
+                          const targetType = e.target.attrs.type;
+                          const isDesignElement = targetType === 'image' || targetType === 'text' || targetType === 'shape';
+
+                          if (isBackground || !isDesignElement) {
+                            selectionStartPos.current = pos;
+                            setSelectionBox({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y, active: true });
+                          }
+
+                          if (isBackground) {
+                            setSelectedIds([]);
+                            if (isMobile) {
+                              setShowRightPanel(false);
+                              setIsMobileMenuOpen(false);
+                            }
+                          }
+                        } else if (isBackground) {
                           setSelectedIds([]);
                           if (isMobile) {
                             setShowRightPanel(false);
@@ -3384,15 +3592,43 @@ const DesignEditor: React.FC = () => {
                           }
                         }
                       }}
-                      onTouchStart={(e: any) => {
-                        const clickedOnEmpty = e.target === e.target.getStage();
-                        if (clickedOnEmpty) {
-                          setSelectedIds([]);
-                          if (isMobile) {
-                            setShowRightPanel(false);
-                            setIsMobileMenuOpen(false);
-                          }
+                      onTouchMove={(e: any) => {
+                        if (!selectionBox || !selectionBox.active || e.evt.touches.length > 1) {
+                          if (selectionBox) setSelectionBox(null);
+                          return;
                         }
+                        const stage = e.target.getStage();
+                        const pos = stage.getRelativePointerPosition();
+                        setSelectionBox(prev => prev ? { ...prev, x2: pos.x, y2: pos.y } : null);
+                      }}
+                      onTouchEnd={() => {
+                        if (!selectionBox || !selectionBox.active) return;
+
+                        const rect = {
+                          minX: Math.min(selectionBox.x1, selectionBox.x2),
+                          maxX: Math.max(selectionBox.x1, selectionBox.x2),
+                          minY: Math.min(selectionBox.y1, selectionBox.y2),
+                          maxY: Math.max(selectionBox.y1, selectionBox.y2)
+                        };
+
+                        const newlySelectedIds: string[] = [];
+                        elements.forEach(el => {
+                          if (el.view !== currentView || el.visible === false) return;
+                          const elBounds = calculateRotatedBounds(el.x, el.y, el.width || 0, el.height || 0, el.rotation || 0);
+
+                          if (!(elBounds.minX > rect.maxX ||
+                            elBounds.maxX < rect.minX ||
+                            elBounds.minY > rect.maxY ||
+                            elBounds.maxY < rect.minY)) {
+                            newlySelectedIds.push(el.id);
+                          }
+                        });
+
+                        if (newlySelectedIds.length > 0) {
+                          setSelectedIds(newlySelectedIds);
+                        }
+
+                        setSelectionBox(null);
                       }}
                     >
                       <Layer listening={false}>
@@ -3477,12 +3713,12 @@ const DesignEditor: React.FC = () => {
                             onClick: () => {
                               setSelectedPlaceholderId(ph.id);
                               selectedPlaceholderIdRef.current = ph.id;
-                              toast.info(`${ph.original.name || 'Placeholder'} selected`);
+                              // toast.info(`${ph.original.name || 'Placeholder'} selected`);
                             },
                             onTap: () => {
                               setSelectedPlaceholderId(ph.id);
                               selectedPlaceholderIdRef.current = ph.id;
-                              toast.info(`${ph.original.name || 'Placeholder'} selected`);
+                              // toast.info(`${ph.original.name || 'Placeholder'} selected`);
                             },
                           } as any;
 
@@ -3496,6 +3732,7 @@ const DesignEditor: React.FC = () => {
                                 strokeWidth={strokeWidth}
                                 fill={fill}
                                 listening
+                                isPlaceholder={true}
                                 perfectDrawEnabled={false}
                                 {...commonHandlers}
                               />
@@ -3513,6 +3750,7 @@ const DesignEditor: React.FC = () => {
                               strokeWidth={strokeWidth}
                               fill={fill}
                               listening
+                              isPlaceholder={true}
                               {...commonHandlers}
                             />
                           );
@@ -3545,7 +3783,11 @@ const DesignEditor: React.FC = () => {
                                   key={el.id}
                                   element={el}
                                   isSelected={selectedIds.includes(el.id)}
-                                  onSelect={() => setSelectedIds([el.id])}
+                                  onSelect={() => {
+                                    if (activeTool === 'move') return;
+                                    setSelectedIds([el.id]);
+                                    if (!isMobile) setRightPanelTab('properties');
+                                  }}
                                   onUpdate={(updates, saveImmediately = false) => {
                                     updateElement(el.id, updates, !saveImmediately);
                                     if (saveImmediately) {
@@ -3563,7 +3805,15 @@ const DesignEditor: React.FC = () => {
                                   key={el.id}
                                   element={el}
                                   isSelected={selectedIds.includes(el.id)}
-                                  onSelect={() => setSelectedIds([el.id])}
+                                  onSelect={() => {
+                                    if (activeTool === 'move') return;
+                                    if (selectedIds.includes(el.id)) {
+                                      handleTextDblClick(el.id);
+                                    } else {
+                                      setSelectedIds([el.id]);
+                                      if (!isMobile) setRightPanelTab('properties');
+                                    }
+                                  }}
                                   onDblClick={() => handleTextDblClick(el.id)}
                                   isEditing={editingTextId === el.id}
                                   onUpdate={(updates, saveImmediately = false) => {
@@ -3571,6 +3821,25 @@ const DesignEditor: React.FC = () => {
                                     if (saveImmediately) {
                                       setTimeout(() => saveToHistory(true), 0);
                                     }
+                                  }}
+                                  printArea={elPrintArea}
+                                  isEditMode={!previewMode && !el.locked}
+                                />
+                              );
+                            }
+                            if (el.type === 'shape') {
+                              return (
+                                <ShapeElement
+                                  key={el.id}
+                                  element={el}
+                                  isSelected={selectedIds.includes(el.id)}
+                                  onSelect={() => {
+                                    if (activeTool === 'move') return;
+                                    setSelectedIds([el.id]);
+                                    if (!isMobile) setRightPanelTab('properties');
+                                  }}
+                                  onUpdate={(updates) => {
+                                    updateElement(el.id, updates, true);
                                   }}
                                   printArea={elPrintArea}
                                   isEditMode={!previewMode && !el.locked}
@@ -3807,7 +4076,130 @@ const DesignEditor: React.FC = () => {
                           />
                         )}
                       </Layer>
+                      {/* Selection Box Visualizer */}
+                      {selectionBox && selectionBox.active && (
+                        <Layer>
+                          <Rect
+                            x={Math.min(selectionBox.x1, selectionBox.x2)}
+                            y={Math.min(selectionBox.y1, selectionBox.y2)}
+                            width={Math.abs(selectionBox.x2 - selectionBox.x1)}
+                            height={Math.abs(selectionBox.y2 - selectionBox.y1)}
+                            fill="rgba(34, 197, 94, 0.15)"
+                            stroke="#22c55e"
+                            strokeWidth={1}
+                            listening={false}
+                          />
+                        </Layer>
+                      )}
                     </Stage>
+
+                    {/* Mobile Hand Tool Toggle */}
+                    {isMobile && !previewMode && (
+                      <div className="absolute left-4 bottom-24 z-20 flex flex-col gap-2">
+                        <Button
+                          variant={activeTool === 'move' ? 'default' : 'secondary'}
+                          size="icon"
+                          onClick={() => setActiveTool(activeTool === 'move' ? 'select' : 'move')}
+                          className={`w-12 h-12 rounded-full shadow-lg ${activeTool === 'move' ? 'bg-primary' : 'bg-background'}`}
+                        >
+                          <Hand className={`w-6 h-6 ${activeTool === 'move' ? 'text-primary-foreground' : 'text-foreground'}`} />
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Mobile Selection Toolbar */}
+                    {isMobile && !previewMode && selectedIds.length > 0 && (
+                      <div style={mobileToolbarStyle}>
+                        {selectedIds.length === 1 && elements.find(e => e.id === selectedIds[0])?.type === 'text' ? (
+                          <div className="bg-background/95 backdrop-blur-sm border shadow-xl rounded-xl p-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
+                            {/* Font dropdown placeholder style */}
+                            <div className="flex items-center gap-2 border-r pr-2 flex-shrink-0">
+                              <Button variant="ghost" size="sm" className="h-9 px-3 gap-2 font-medium">
+                                {elements.find(e => e.id === selectedIds[0])?.fontFamily || 'Arial'}
+                                <ChevronRight className="w-3 h-3 rotate-90" />
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-2 border-r pr-2 flex-shrink-0">
+                              <Button variant="ghost" size="sm" className="h-9 w-12 px-0">
+                                {Math.round(elements.find(e => e.id === selectedIds[0])?.fontSize || 24)}
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Button
+                                variant={elements.find(e => e.id === selectedIds[0])?.fontStyle?.includes('bold') ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="h-9 w-9"
+                                onClick={() => {
+                                  const el = elements.find(e => e.id === selectedIds[0]);
+                                  const current = el?.fontStyle || '';
+                                  updateElement(selectedIds[0], { fontStyle: current.includes('bold') ? current.replace('bold', '').trim() : `${current} bold`.trim() });
+                                }}
+                              >
+                                <Bold className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant={elements.find(e => e.id === selectedIds[0])?.fontStyle?.includes('italic') ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="h-9 w-9"
+                                onClick={() => {
+                                  const el = elements.find(e => e.id === selectedIds[0]);
+                                  const current = el?.fontStyle || '';
+                                  updateElement(selectedIds[0], { fontStyle: current.includes('italic') ? current.replace('italic', '').trim() : `${current} italic`.trim() });
+                                }}
+                              >
+                                <Italic className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Button
+                                variant={elements.find(e => e.id === selectedIds[0])?.align === 'left' ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="h-9 w-9"
+                                onClick={() => updateElement(selectedIds[0], { align: 'left' })}
+                              >
+                                <AlignLeft className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant={elements.find(e => e.id === selectedIds[0])?.align === 'center' ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="h-9 w-9"
+                                onClick={() => updateElement(selectedIds[0], { align: 'center' })}
+                              >
+                                <AlignCenter className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant={elements.find(e => e.id === selectedIds[0])?.align === 'right' ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="h-9 w-9"
+                                onClick={() => updateElement(selectedIds[0], { align: 'right' })}
+                              >
+                                <AlignRight className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0 border-l pl-2">
+                              <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive" onClick={() => deleteSelected()}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-background/95 backdrop-blur-sm border shadow-xl rounded-xl p-2 flex items-center gap-1 overflow-x-auto no-scrollbar justify-center">
+                            <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => {
+                              const el = elements.find(e => e.id === selectedIds[0]);
+                              if (el) updateElement(el.id, { flipX: !el.flipX });
+                            }}>
+                              <RotateCw className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-10 w-10" onClick={duplicateSelected}>
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-10 w-10 text-destructive" onClick={deleteSelected}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3938,6 +4330,7 @@ const DesignEditor: React.FC = () => {
                     setSelectedIds([id]);
                     setSelectedPlaceholderId(null);
                     selectedPlaceholderIdRef.current = null;
+                    if (!isMobile) setRightPanelTab('properties');
                   }}
                   onUpdate={updateElement}
                   onDelete={(id) => {
@@ -4016,6 +4409,7 @@ const DesignEditor: React.FC = () => {
                       setSelectedIds([id]);
                       setSelectedPlaceholderId(null);
                       selectedPlaceholderIdRef.current = null;
+                      if (!isMobile) setRightPanelTab('properties');
                     }}
                     onUpdate={updateElement}
                     onDelete={(id) => {
@@ -4338,6 +4732,7 @@ const ImageElement: React.FC<{
   // Common image props
   const imageProps = {
     id: element.id,
+    type: 'image',
     image: image,
     x: effectiveX,
     y: effectiveY,
@@ -4349,6 +4744,7 @@ const ImageElement: React.FC<{
     rotation: element.rotation,
     draggable: isEditMode && !element.locked,
     onClick: isEditMode ? onSelect : undefined,
+    onTap: isEditMode ? onSelect : undefined,
     onDragEnd: isEditMode ? handleDragEnd : undefined,
     onTransformEnd: isEditMode ? handleTransformEnd : undefined,
     dragBoundFunc: isEditMode ? dragBoundFunc : undefined,
@@ -4582,6 +4978,7 @@ const TextElement: React.FC<{
 
   const commonTextProps: any = {
     id: element.id,
+    type: 'text',
     x: element.x,
     y: element.y,
     text: displayText || ' ', // Use space for empty text to maintain cursor
@@ -4594,6 +4991,7 @@ const TextElement: React.FC<{
     rotation: element.rotation || 0,
     draggable: isEditMode && !element.locked,
     onClick: isEditMode ? onSelect : undefined,
+    onTap: isEditMode ? onSelect : undefined,
     onDblClick: isEditMode ? onDblClick : undefined,
     onDragEnd: isEditMode ? handleDragEnd : undefined,
     // GHOSTING FIX: Pixi is now hidden in edit mode, so Konva text should be fully visible
@@ -4859,6 +5257,7 @@ const ShapeElement: React.FC<{
 
   const baseProps: any = {
     id: element.id,
+    type: 'shape',
     x: element.x,
     y: element.y,
     fill: element.fillColor || '#000000',
@@ -4868,6 +5267,7 @@ const ShapeElement: React.FC<{
     rotation: element.rotation || 0,
     draggable: isEditMode && !element.locked,
     onClick: isEditMode ? onSelect : undefined,
+    onTap: isEditMode ? onSelect : undefined,
     onDragEnd: isEditMode ? handleDragEnd : undefined,
     onTransformEnd: isEditMode ? handleTransformEnd : undefined,
     shadowBlur: element.shadowBlur || 0,
@@ -4984,6 +5384,7 @@ const PropertiesPanel: React.FC<{
   onElementDelete?: (id: string) => void;
   PX_PER_INCH: number;
   canvasPadding: number;
+  hideElementRow?: boolean;
 }> = ({
   selectedPlaceholderId,
   placeholders,
@@ -4998,6 +5399,7 @@ const PropertiesPanel: React.FC<{
   onElementDelete,
   PX_PER_INCH,
   canvasPadding,
+  hideElementRow = false,
 }) => {
     const [designTransforms, setDesignTransforms] = useState<Record<string, { x: number; y: number; scale: number }>>({});
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -5079,12 +5481,17 @@ const PropertiesPanel: React.FC<{
                 <div className="p-3 border rounded-lg bg-background">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="w-8 h-8 rounded border bg-muted flex items-center justify-center flex-shrink-0">
-                        <Type className="w-4 h-4 text-muted-foreground" />
+                      <div className="w-12 h-12 rounded border bg-background flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                        <div className="flex flex-col items-center justify-center w-full h-full bg-white">
+                          <span className="text-sm font-bold text-primary leading-none">T</span>
+                          <div className="w-full h-[2px] bg-primary/20 mt-1" />
+                        </div>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{element.text || 'Text'}</p>
-                        <p className="text-xs text-muted-foreground">{element.fontFamily || 'Arial'}</p>
+                        <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-tight">
+                          {element.fontSize ? `${(element.fontSize / (PX_PER_INCH || 96)).toFixed(2)}" pt` : 'Text Layer'}
+                        </p>
                       </div>
                     </div>
                     <Button
@@ -5234,10 +5641,11 @@ const PropertiesPanel: React.FC<{
                 </div>
 
                 {/* Text Alignment */}
-                {/* <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <Button
                     variant={element.align === 'left' ? 'default' : 'outline'}
                     size="sm"
+                    className="flex-1"
                     onClick={() => onUpdate({ align: 'left' })}
                   >
                     <AlignLeft className="w-4 h-4" />
@@ -5245,6 +5653,7 @@ const PropertiesPanel: React.FC<{
                   <Button
                     variant={element.align === 'center' || !element.align ? 'default' : 'outline'}
                     size="sm"
+                    className="flex-1"
                     onClick={() => onUpdate({ align: 'center' })}
                   >
                     <AlignCenter className="w-4 h-4" />
@@ -5252,11 +5661,12 @@ const PropertiesPanel: React.FC<{
                   <Button
                     variant={element.align === 'right' ? 'default' : 'outline'}
                     size="sm"
+                    className="flex-1"
                     onClick={() => onUpdate({ align: 'right' })}
                   >
                     <AlignRight className="w-4 h-4" />
                   </Button>
-                </div> */}
+                </div>
 
                 {/* Color */}
                 <div>
@@ -5486,25 +5896,35 @@ const PropertiesPanel: React.FC<{
           {/* Graphics/Image/Shape Elements - Unified Controls */}
           {(element.type === 'image' || element.type === 'shape') && (
             <>
-              {/* Layers Section */}
-              <div className="space-y-3 border-t pt-4">
+              {/* Layers Section - hidden when the caller already shows the element row */}
+              {!hideElementRow && <div className="space-y-3 border-t pt-4">
                 <Label className="text-sm font-semibold">Layers</Label>
                 <div className="p-3 border rounded-lg bg-background">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="w-8 h-8 rounded border bg-muted flex items-center justify-center flex-shrink-0">
-                        {element.type === 'image' ? (
-                          <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                      <div className="w-12 h-12 rounded border bg-background flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                        {element.type === 'image' && element.imageUrl ? (
+                          <img
+                            src={element.imageUrl}
+                            alt="Thumbnail"
+                            className="w-full h-full object-contain"
+                            style={{ imageRendering: 'auto' }}
+                          />
+                        ) : element.type === 'shape' ? (
+                          <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: element.fillColor || '#000' }}>
+                            {element.shapeType === 'circle' && <div className="w-8 h-8 rounded-full border border-white/40" />}
+                            {element.shapeType === 'rect' && <div className="w-8 h-8 border border-white/40" />}
+                          </div>
                         ) : (
-                          <Square className="w-4 h-4 text-muted-foreground" />
+                          <ImageIcon className="w-6 h-6 text-muted-foreground" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
                           {element.type === 'image' ? (element.name || 'Image') : (element.name || element.shapeType || 'Shape')}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {element.width ? `${Math.round(element.width)}×${Math.round(element.height || 0)}` : 'Element'}
+                        <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-tight">
+                          {element.width ? `${(element.width / (PX_PER_INCH || 96)).toFixed(2)}" × ${(element.height / (PX_PER_INCH || 96)).toFixed(2)}"` : 'Asset'}
                         </p>
                       </div>
                     </div>
@@ -5523,348 +5943,350 @@ const PropertiesPanel: React.FC<{
                     </Button>
                   </div>
                 </div>
+              </div>}
 
-                {/* Transform Controls - Grid Layout */}
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Width */}
-                  <div>
-                    <Label className="text-sm">Width</Label>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Input
-                        type="number"
-                        value={element.width ? (element.width / PX_PER_INCH).toFixed(2) : '0'}
-                        onChange={(e) => {
-                          const inches = parseFloat(e.target.value) || 0;
-                          const pixels = inches * PX_PER_INCH;
-                          if (element.lockAspectRatio && element.width && element.height) {
-                            const aspectRatio = element.width / element.height;
-                            onUpdate({ width: pixels, height: pixels / aspectRatio });
-                          } else {
-                            onUpdate({ width: pixels });
-                          }
-                        }}
-                        className="w-full h-8 text-sm"
-                        step="0.01"
-                      />
-                      <span className="text-xs text-muted-foreground">in</span>
-                    </div>
-                  </div>
-
-                  {/* Height */}
-                  <div>
-                    <Label className="text-sm">Height</Label>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Input
-                        type="number"
-                        value={element.height ? (element.height / PX_PER_INCH).toFixed(2) : '0'}
-                        onChange={(e) => {
-                          const inches = parseFloat(e.target.value) || 0;
-                          const pixels = inches * PX_PER_INCH;
-                          if (element.lockAspectRatio && element.width && element.height) {
-                            const aspectRatio = element.width / element.height;
-                            onUpdate({ height: pixels, width: pixels * aspectRatio });
-                          } else {
-                            onUpdate({ height: pixels });
-                          }
-                        }}
-                        className="w-full h-8 text-sm"
-                        step="0.01"
-                      />
-                      <span className="text-xs text-muted-foreground">in</span>
-                    </div>
-                  </div>
-
-                  {/* Rotate */}
-                  <div>
-                    <Label className="text-sm">Rotate</Label>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Input
-                        type="number"
-                        value={Math.round(element.rotation || 0)}
-                        onChange={(e) => onUpdate({ rotation: parseFloat(e.target.value) || 0 })}
-                        className="w-full h-8 text-sm"
-                        step="1"
-                      />
-                      <span className="text-xs text-muted-foreground">deg</span>
-                    </div>
-                  </div>
-
-                  {/* Scale */}
-                  <div>
-                    <Label className="text-sm">Scale</Label>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Input
-                        type="number"
-                        value={element.scaleX ? Math.round(element.scaleX * 100 * 100) / 100 : '100'}
-                        onChange={(e) => {
-                          const scale = parseFloat(e.target.value) || 100;
-                          const scaleValue = scale / 100;
-                          // Update scale while preserving current dimensions
-                          const currentWidth = element.width || 100;
-                          const currentHeight = element.height || 100;
-                          onUpdate({
-                            scaleX: scaleValue,
-                            scaleY: scaleValue,
-                            width: currentWidth * scaleValue,
-                            height: currentHeight * scaleValue
-                          });
-                        }}
-                        className="w-full h-8 text-sm"
-                        step="0.01"
-                      />
-                      <span className="text-xs text-muted-foreground">%</span>
-                    </div>
+              {/* Transform Controls - Grid Layout */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Width */}
+                <div>
+                  <Label className="text-sm">Width</Label>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Input
+                      type="number"
+                      value={element.width ? (element.width / PX_PER_INCH).toFixed(2) : '0'}
+                      onChange={(e) => {
+                        const inches = parseFloat(e.target.value) || 0;
+                        const pixels = inches * PX_PER_INCH;
+                        if (element.lockAspectRatio && element.width && element.height) {
+                          const aspectRatio = element.width / element.height;
+                          onUpdate({ width: pixels, height: pixels / aspectRatio });
+                        } else {
+                          onUpdate({ width: pixels });
+                        }
+                      }}
+                      className="w-full h-8 text-sm"
+                      step="0.01"
+                    />
+                    <span className="text-xs text-muted-foreground">in</span>
                   </div>
                 </div>
 
-                {/* Position Controls */}
-                <div className="space-y-3 border-t pt-3">
-                  {/* Position Left */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label className="text-xs">Position left</Label>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => {
-                            const placeholder = element.placeholderId
-                              ? placeholders.find(p => p.id === element.placeholderId)
-                              : null;
-                            if (placeholder) {
-                              const current = ((element.x - placeholder.x) / placeholder.width) * 100;
-                              const newPercent = Math.max(0, current - 0.1);
-                              const newValue = placeholder.x + (placeholder.width * newPercent / 100);
-                              onUpdate({ x: newValue });
-                            }
-                          }}
-                        >
-                          <ArrowLeft className="w-3 h-3" />
-                        </Button>
-                        <Input
-                          type="number"
-                          value={(() => {
-                            const placeholder = element.placeholderId
-                              ? placeholders.find(p => p.id === element.placeholderId)
-                              : null;
-                            if (placeholder) {
-                              return (((element.x - placeholder.x) / placeholder.width) * 100).toFixed(2);
-                            }
-                            return '0';
-                          })()}
-                          onChange={(e) => {
-                            const placeholder = element.placeholderId
-                              ? placeholders.find(p => p.id === element.placeholderId)
-                              : null;
-                            if (placeholder) {
-                              const percent = parseFloat(e.target.value) || 0;
-                              const newValue = placeholder.x + (placeholder.width * percent / 100);
-                              onUpdate({ x: newValue });
-                            }
-                          }}
-                          className="w-20 h-7 text-xs text-center"
-                          step="0.1"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => {
-                            const placeholder = element.placeholderId
-                              ? placeholders.find(p => p.id === element.placeholderId)
-                              : null;
-                            if (placeholder) {
-                              const current = ((element.x - placeholder.x) / placeholder.width) * 100;
-                              const newPercent = Math.min(100, current + 0.1);
-                              const newValue = placeholder.x + (placeholder.width * newPercent / 100);
-                              onUpdate({ x: newValue });
-                            }
-                          }}
-                        >
-                          <ArrowRight className="w-3 h-3" />
-                        </Button>
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                    </div>
+                {/* Height */}
+                <div>
+                  <Label className="text-sm">Height</Label>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Input
+                      type="number"
+                      value={element.height ? (element.height / PX_PER_INCH).toFixed(2) : '0'}
+                      onChange={(e) => {
+                        const inches = parseFloat(e.target.value) || 0;
+                        const pixels = inches * PX_PER_INCH;
+                        if (element.lockAspectRatio && element.width && element.height) {
+                          const aspectRatio = element.width / element.height;
+                          onUpdate({ height: pixels, width: pixels * aspectRatio });
+                        } else {
+                          onUpdate({ height: pixels });
+                        }
+                      }}
+                      className="w-full h-8 text-sm"
+                      step="0.01"
+                    />
+                    <span className="text-xs text-muted-foreground">in</span>
                   </div>
+                </div>
 
-                  {/* Position Top */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label className="text-xs">Position top</Label>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => {
-                            const placeholder = element.placeholderId
-                              ? placeholders.find(p => p.id === element.placeholderId)
-                              : null;
-                            if (placeholder) {
-                              const current = ((element.y - placeholder.y) / placeholder.height) * 100;
-                              const newPercent = Math.max(0, current - 0.1);
-                              const newValue = placeholder.y + (placeholder.height * newPercent / 100);
-                              onUpdate({ y: newValue });
-                            }
-                          }}
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                        </Button>
-                        <Input
-                          type="number"
-                          value={(() => {
-                            const placeholder = element.placeholderId
-                              ? placeholders.find(p => p.id === element.placeholderId)
-                              : null;
-                            if (placeholder) {
-                              return (((element.y - placeholder.y) / placeholder.height) * 100).toFixed(2);
-                            }
-                            return '0';
-                          })()}
-                          onChange={(e) => {
-                            const placeholder = element.placeholderId
-                              ? placeholders.find(p => p.id === element.placeholderId)
-                              : null;
-                            if (placeholder) {
-                              const percent = parseFloat(e.target.value) || 0;
-                              const newValue = placeholder.y + (placeholder.height * percent / 100);
-                              onUpdate({ y: newValue });
-                            }
-                          }}
-                          className="w-20 h-7 text-xs text-center"
-                          step="0.1"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => {
-                            const placeholder = element.placeholderId
-                              ? placeholders.find(p => p.id === element.placeholderId)
-                              : null;
-                            if (placeholder) {
-                              const current = ((element.y - placeholder.y) / placeholder.height) * 100;
-                              const newPercent = Math.min(100, current + 0.1);
-                              const newValue = placeholder.y + (placeholder.height * newPercent / 100);
-                              onUpdate({ y: newValue });
-                            }
-                          }}
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </Button>
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                    </div>
+                {/* Rotate */}
+                <div>
+                  <Label className="text-sm">Rotate</Label>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Input
+                      type="number"
+                      value={Math.round(element.rotation || 0)}
+                      onChange={(e) => onUpdate({ rotation: parseFloat(e.target.value) || 0 })}
+                      className="w-full h-8 text-sm"
+                      step="1"
+                    />
+                    <span className="text-xs text-muted-foreground">deg</span>
                   </div>
+                </div>
 
-                  {/* Alignment Buttons */}
-                  <div className="space-y-2 pt-2">
-                    {/* Horizontal Alignment */}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder && element.width) {
-                            onUpdate({ x: placeholder.x });
-                          }
-                        }}
-                      >
-                        <AlignLeft className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder && element.width) {
-                            onUpdate({ x: placeholder.x + (placeholder.width / 2) - (element.width / 2) });
-                          }
-                        }}
-                      >
-                        <AlignCenter className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder && element.width) {
-                            onUpdate({ x: placeholder.x + placeholder.width - element.width });
-                          }
-                        }}
-                      >
-                        <AlignRight className="w-4 h-4" />
-                      </Button>
-                    </div>
+                {/* Scale */}
+                <div>
+                  <Label className="text-sm">Scale</Label>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Input
+                      type="number"
+                      value={element.scaleX ? Math.round(element.scaleX * 100 * 100) / 100 : '100'}
+                      onChange={(e) => {
+                        const scale = parseFloat(e.target.value) || 100;
+                        const scaleValue = scale / 100;
+                        // Update scale while preserving current dimensions
+                        const currentWidth = element.width || 100;
+                        const currentHeight = element.height || 100;
+                        onUpdate({
+                          scaleX: scaleValue,
+                          scaleY: scaleValue,
+                          width: currentWidth * scaleValue,
+                          height: currentHeight * scaleValue
+                        });
+                      }}
+                      className="w-full h-8 text-sm"
+                      step="0.01"
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                  </div>
+                </div>
+              </div>
 
-                    {/* Vertical Alignment */}
-                    <div className="flex items-center gap-2">
+              {/* Position Controls */}
+              <div className="space-y-3 border-t pt-3">
+                {/* Position Left */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-xs">Position left</Label>
+                    <div className="flex items-center gap-1">
                       <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
                         onClick={() => {
                           const placeholder = element.placeholderId
                             ? placeholders.find(p => p.id === element.placeholderId)
                             : null;
                           if (placeholder) {
-                            onUpdate({ y: placeholder.y });
+                            const current = ((element.x - placeholder.x) / placeholder.width) * 100;
+                            const newPercent = Math.max(0, current - 0.1);
+                            const newValue = placeholder.x + (placeholder.width * newPercent / 100);
+                            onUpdate({ x: newValue });
                           }
                         }}
                       >
-                        <ArrowUp className="w-4 h-4" />
+                        <ArrowLeft className="w-3 h-3" />
                       </Button>
+                      <Input
+                        type="number"
+                        value={(() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder) {
+                            return (((element.x - placeholder.x) / placeholder.width) * 100).toFixed(2);
+                          }
+                          return '0';
+                        })()}
+                        onChange={(e) => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder) {
+                            const percent = parseFloat(e.target.value) || 0;
+                            const newValue = placeholder.x + (placeholder.width * percent / 100);
+                            onUpdate({ x: newValue });
+                          }
+                        }}
+                        className="w-20 h-7 text-xs text-center"
+                        step="0.1"
+                      />
                       <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
                         onClick={() => {
                           const placeholder = element.placeholderId
                             ? placeholders.find(p => p.id === element.placeholderId)
                             : null;
-                          if (placeholder && element.height) {
-                            onUpdate({ y: placeholder.y + (placeholder.height / 2) - (element.height / 2) });
+                          if (placeholder) {
+                            const current = ((element.x - placeholder.x) / placeholder.width) * 100;
+                            const newPercent = Math.min(100, current + 0.1);
+                            const newValue = placeholder.x + (placeholder.width * newPercent / 100);
+                            onUpdate({ x: newValue });
                           }
                         }}
                       >
-                        <ArrowUp className="w-4 h-4" />
-                        <ArrowDown className="w-4 h-4" />
+                        <ArrowRight className="w-3 h-3" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder && element.height) {
-                            onUpdate({ y: placeholder.y + placeholder.height - element.height });
-                          }
-                        }}
-                      >
-                        <ArrowDown className="w-4 h-4" />
-                      </Button>
+                      <span className="text-xs text-muted-foreground">%</span>
                     </div>
                   </div>
                 </div>
+
+                {/* Position Top */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-xs">Position top</Label>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder) {
+                            const current = ((element.y - placeholder.y) / placeholder.height) * 100;
+                            const newPercent = Math.max(0, current - 0.1);
+                            const newValue = placeholder.y + (placeholder.height * newPercent / 100);
+                            onUpdate({ y: newValue });
+                          }
+                        }}
+                      >
+                        <ArrowUp className="w-3 h-3" />
+                      </Button>
+                      <Input
+                        type="number"
+                        value={(() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder) {
+                            return (((element.y - placeholder.y) / placeholder.height) * 100).toFixed(2);
+                          }
+                          return '0';
+                        })()}
+                        onChange={(e) => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder) {
+                            const percent = parseFloat(e.target.value) || 0;
+                            const newValue = placeholder.y + (placeholder.height * percent / 100);
+                            onUpdate({ y: newValue });
+                          }
+                        }}
+                        className="w-20 h-7 text-xs text-center"
+                        step="0.1"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder) {
+                            const current = ((element.y - placeholder.y) / placeholder.height) * 100;
+                            const newPercent = Math.min(100, current + 0.1);
+                            const newValue = placeholder.y + (placeholder.height * newPercent / 100);
+                            onUpdate({ y: newValue });
+                          }
+                        }}
+                      >
+                        <ArrowDown className="w-3 h-3" />
+                      </Button>
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Alignment Buttons */}
+                <div className="space-y-2 pt-2">
+                  {/* Horizontal Alignment */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        const placeholder = element.placeholderId
+                          ? placeholders.find(p => p.id === element.placeholderId)
+                          : null;
+                        if (placeholder && element.width) {
+                          onUpdate({ x: placeholder.x });
+                        }
+                      }}
+                    >
+                      <AlignLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        const placeholder = element.placeholderId
+                          ? placeholders.find(p => p.id === element.placeholderId)
+                          : null;
+                        if (placeholder && element.width) {
+                          onUpdate({ x: placeholder.x + (placeholder.width / 2) - (element.width / 2) });
+                        }
+                      }}
+                    >
+                      <AlignCenter className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        const placeholder = element.placeholderId
+                          ? placeholders.find(p => p.id === element.placeholderId)
+                          : null;
+                        if (placeholder && element.width) {
+                          onUpdate({ x: placeholder.x + placeholder.width - element.width });
+                        }
+                      }}
+                    >
+                      <AlignRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  {/* Vertical Alignment */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        const placeholder = element.placeholderId
+                          ? placeholders.find(p => p.id === element.placeholderId)
+                          : null;
+                        if (placeholder) {
+                          onUpdate({ y: placeholder.y });
+                        }
+                      }}
+                    >
+                      <ArrowUp className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        const placeholder = element.placeholderId
+                          ? placeholders.find(p => p.id === element.placeholderId)
+                          : null;
+                        if (placeholder && element.height) {
+                          onUpdate({ y: placeholder.y + (placeholder.height / 2) - (element.height / 2) });
+                        }
+                      }}
+                    >
+                      <ArrowUp className="w-4 h-4" />
+                      <ArrowDown className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        const placeholder = element.placeholderId
+                          ? placeholders.find(p => p.id === element.placeholderId)
+                          : null;
+                        if (placeholder && element.height) {
+                          onUpdate({ y: placeholder.y + placeholder.height - element.height });
+                        }
+                      }}
+                    >
+                      <ArrowDown className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
+
             </>
-          )}
-        </div>
+          )
+          }
+        </div >
       );
     }
 
@@ -6018,7 +6440,12 @@ const LayersPanel: React.FC<{
           <div className="space-y-2">
             <Label className="text-sm font-semibold uppercase text-muted-foreground">Placeholders</Label>
             <div className="space-y-2">
-              <Accordion type="single" collapsible className="space-y-2">
+              <Accordion
+                type="single"
+                collapsible
+                defaultValue={placeholders[0]?.id}
+                className="space-y-2"
+              >
                 {placeholders.map((placeholder) => {
                   const designUrl = designUrlsByPlaceholder[placeholder.id];
                   const isSelected = selectedPlaceholderId === placeholder.id;
@@ -6028,139 +6455,238 @@ const LayersPanel: React.FC<{
                     <AccordionItem
                       key={placeholder.id}
                       value={placeholder.id}
-                      className="border rounded-lg px-3 overflow-hidden"
+                      className="border rounded-lg px-2 overflow-hidden bg-card"
                     >
                       <div className="flex items-center justify-between">
                         {isMobile ? (
                           <AccordionTrigger
-                            className="flex-1 py-3 px-0 hover:no-underline"
+                            className="flex-1 py-4 px-0 hover:no-underline"
+                            hideIcon={true}
                             onClick={() => onSelectPlaceholder(placeholder.id)}
                           >
-                            <div className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                            <div className="flex items-center gap-3 flex-1 min-w-0 text-left">
                               <div
-                                className="w-8 h-8 rounded border flex items-center justify-center flex-shrink-0"
-                                style={{ backgroundColor: `${baseColor}40`, borderColor: baseColor }}
+                                className="w-14 h-14 rounded-lg border flex items-center justify-center flex-shrink-0"
+                                style={{ backgroundColor: `${baseColor}20`, borderColor: baseColor }}
                               >
                                 {designUrl ? (
-                                  <img src={designUrl} alt="Design" className="w-full h-full object-contain rounded" />
+                                  <img src={designUrl} alt="Design" className="w-full h-full object-contain rounded-md" />
                                 ) : (
-                                  <Square className="w-4 h-4" style={{ color: baseColor }} />
+                                  <Square className="w-6 h-6" style={{ color: baseColor }} />
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">
+                                <p className="text-base font-bold truncate leading-snug">
                                   {placeholder.original.name || `Placeholder ${placeholder.id.slice(0, 8)}`}
                                 </p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-muted-foreground font-medium mt-0.5">
                                   {placeholder.original.widthIn.toFixed(1)}" × {placeholder.original.heightIn.toFixed(1)}"
-                                  {designUrl && ' • Design'}
+                                  {designUrl && ' • Design added'}
                                 </p>
                               </div>
                             </div>
                           </AccordionTrigger>
                         ) : (
                           <div
-                            className="flex items-center gap-2 flex-1 min-w-0 py-3 cursor-pointer"
+                            className={`flex items-center gap-2 flex-1 min-w-0 py-3 cursor-pointer ${isSelected ? 'rounded-lg bg-primary/10' : 'hover:bg-muted/50'}`}
                             onClick={() => onSelectPlaceholder(placeholder.id)}
                           >
                             <div
-                              className="w-8 h-8 rounded border flex items-center justify-center flex-shrink-0"
-                              style={{ backgroundColor: `${baseColor}40`, borderColor: baseColor }}
+                              className="w-10 h-10 rounded border flex items-center justify-center flex-shrink-0 overflow-hidden ml-2"
+                              style={{ backgroundColor: `${baseColor}20`, borderColor: baseColor }}
                             >
                               {designUrl ? (
-                                <img src={designUrl} alt="Design" className="w-full h-full object-contain rounded" />
+                                <img src={designUrl} alt="Design" className="w-full h-full object-contain" />
                               ) : (
-                                <Square className="w-4 h-4" style={{ color: baseColor }} />
+                                <Square className="w-5 h-5" style={{ color: baseColor }} />
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">
+                              <p className="text-sm font-bold truncate">
                                 {placeholder.original.name || `Placeholder ${placeholder.id.slice(0, 8)}`}
                               </p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-[10px] text-muted-foreground uppercase font-semibold">
                                 {placeholder.original.widthIn.toFixed(1)}" × {placeholder.original.heightIn.toFixed(1)}"
-                                {designUrl && ' • Design'}
                               </p>
                             </div>
                           </div>
                         )}
                         <div className="flex items-center gap-1">
-                          {!isMobile && designUrl && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDesignRemove(placeholder.id);
-                              }}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
+                          {!isMobile && (
+                            <AccordionTrigger className="h-8 w-8 p-0" />
                           )}
                         </div>
                       </div>
 
-                      <AccordionContent className="pt-2 border-t mt-1">
-                        {isMobile && elementsByPlaceholder[placeholder.id]?.length > 0 && (
-                          <div className="mb-4 space-y-2">
-                            <Accordion type="single" collapsible className="space-y-1">
-                              {elementsByPlaceholder[placeholder.id]
-                                .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
-                                .map((element) => (
-                                  <AccordionItem key={element.id} value={element.id} className="border rounded-md px-0 overflow-hidden bg-muted/20">
-                                    <AccordionTrigger
-                                      className="py-2 px-3 hover:no-underline text-left"
-                                      onClick={() => onSelectElement(element.id)}
-                                    >
-                                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        {element.type === 'image' && <ImageIcon className="w-3.5 h-3.5 flex-shrink-0" />}
-                                        {element.type === 'text' && <Type className="w-3.5 h-3.5 flex-shrink-0" />}
-                                        {element.type === 'shape' && <Square className="w-3.5 h-3.5 flex-shrink-0" />}
-                                        <span className="text-xs font-medium truncate">
-                                          {element.type === 'text' ? (element.text || 'Text') : (element.name || (element.type === 'image' ? 'Image' : element.shapeType || 'Shape'))}
-                                        </span>
-                                      </div>
-                                    </AccordionTrigger>
-                                    <AccordionContent className="pt-1 border-t px-3 pb-3">
-                                      <PropertiesPanel
-                                        selectedPlaceholderId={null}
-                                        placeholders={placeholders}
-                                        designUrlsByPlaceholder={designUrlsByPlaceholder}
-                                        onDesignUpload={() => { }}
-                                        onDesignRemove={() => { }}
-                                        displacementSettings={displacementSettings || { scaleX: 10, scaleY: 10, contrastBoost: 1.5 }}
-                                        onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
-                                        selectedElementIds={[element.id]}
-                                        elements={elements}
-                                        onElementUpdate={(updates) => onUpdate(element.id, updates)}
-                                        onElementDelete={onDelete}
-                                        PX_PER_INCH={PX_PER_INCH}
-                                        canvasPadding={canvasPadding}
-                                      />
-                                    </AccordionContent>
-                                  </AccordionItem>
-                                ))}
-                            </Accordion>
-                          </div>
-                        )}
+                      <AccordionContent className="pt-2 border-t mt-1 pb-4">
+                        <div className="space-y-2">
+                          {isMobile ? (() => {
+                            // Mobile: Show only the first element with delete button, then always-visible properties
+                            const sortedElements = (elementsByPlaceholder[placeholder.id] || [])
+                              .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+                            const firstElement = sortedElements[0];
 
-                        <div className={isMobile && elementsByPlaceholder[placeholder.id]?.length > 0 ? "pt-4 border-t" : ""}>
-                          <PropertiesPanel
-                            selectedPlaceholderId={placeholder.id}
-                            placeholders={placeholders}
-                            designUrlsByPlaceholder={designUrlsByPlaceholder}
-                            onDesignUpload={onDesignUpload || (() => { })}
-                            onDesignRemove={onDesignRemove}
-                            displacementSettings={displacementSettings || { scaleX: 10, scaleY: 10, contrastBoost: 1.5 }}
-                            onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
-                            selectedElementIds={[]}
-                            elements={elements}
-                            onElementUpdate={() => { }}
-                            onElementDelete={() => { }}
-                            PX_PER_INCH={PX_PER_INCH}
-                            canvasPadding={canvasPadding}
-                          />
+                            if (!firstElement) {
+                              // No elements yet — show empty-state properties panel (design upload)
+                              return (
+                                <div className="pt-2">
+                                  <PropertiesPanel
+                                    selectedPlaceholderId={placeholder.id}
+                                    placeholders={placeholders}
+                                    designUrlsByPlaceholder={designUrlsByPlaceholder}
+                                    onDesignUpload={onDesignUpload || (() => { })}
+                                    onDesignRemove={onDesignRemove}
+                                    displacementSettings={displacementSettings || { scaleX: 10, scaleY: 10, contrastBoost: 1.5 }}
+                                    onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
+                                    selectedElementIds={[]}
+                                    elements={elements}
+                                    onElementUpdate={() => { }}
+                                    onElementDelete={() => { }}
+                                    PX_PER_INCH={PX_PER_INCH}
+                                    canvasPadding={canvasPadding}
+                                  />
+                                </div>
+                              );
+                            }
+
+                            // Show a single element row (first/top element) + inline properties
+                            return (
+                              <div className="space-y-3">
+                                {/* Single element row with delete button */}
+                                <div
+                                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${selectedIds.includes(firstElement.id) ? 'bg-primary/10 border-primary/20 border-2 shadow-sm' : 'bg-muted/30 border border-transparent hover:bg-muted/50'}`}
+                                  onClick={() => onSelectElement(firstElement.id)}
+                                >
+                                  {/* Thumbnail */}
+                                  <div className="w-16 h-16 rounded-lg border bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                                    {firstElement.type === 'image' && firstElement.imageUrl ? (
+                                      <img
+                                        src={firstElement.imageUrl}
+                                        alt="Thumbnail"
+                                        className="w-full h-full object-contain"
+                                        style={{ imageRendering: 'auto' }}
+                                      />
+                                    ) : firstElement.type === 'text' ? (
+                                      <div className="flex flex-col items-center justify-center w-full h-full bg-white">
+                                        <span className="text-sm font-bold text-primary leading-none">T</span>
+                                        <div className="w-full h-[2px] bg-primary/20 mt-1" />
+                                      </div>
+                                    ) : (
+                                      <Square className="w-6 h-6 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                  {/* Name + dimensions */}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold truncate">
+                                      {firstElement.type === 'text'
+                                        ? (firstElement.text || 'Text')
+                                        : (firstElement.name || (firstElement.type === 'image' ? 'Image' : firstElement.shapeType || 'Shape'))}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
+                                      {firstElement.width
+                                        ? `${(firstElement.width / (PX_PER_INCH || 96)).toFixed(1)}" × ${(firstElement.height / (PX_PER_INCH || 96)).toFixed(1)}"`
+                                        : 'Asset'}
+                                    </p>
+                                  </div>
+                                  {/* Delete button */}
+                                  <button
+                                    className="flex-shrink-0 p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors active:scale-95"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDelete(firstElement.id);
+                                    }}
+                                    aria-label="Delete element"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+
+                                {/* Inline properties always visible on mobile */}
+                                <div className="px-1 pt-1 pb-2 bg-muted/10 rounded-b-xl">
+                                  <PropertiesPanel
+                                    selectedPlaceholderId={placeholder.id}
+                                    placeholders={placeholders}
+                                    designUrlsByPlaceholder={designUrlsByPlaceholder}
+                                    onDesignUpload={onDesignUpload || (() => { })}
+                                    onDesignRemove={onDesignRemove}
+                                    displacementSettings={displacementSettings || { scaleX: 20, scaleY: 20, contrastBoost: 1.5 }}
+                                    onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
+                                    selectedElementIds={[firstElement.id]}
+                                    elements={elements}
+                                    onElementUpdate={(updates) => onUpdate(firstElement.id, updates)}
+                                    onElementDelete={onDelete}
+                                    PX_PER_INCH={PX_PER_INCH}
+                                    canvasPadding={canvasPadding}
+                                    hideElementRow={true}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })() : (
+                            // Desktop: keep existing multi-element list
+                            <>
+                              {elementsByPlaceholder[placeholder.id]
+                                ?.sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
+                                .map((element) => {
+                                  const isElementSelected = selectedIds.includes(element.id);
+                                  return (
+                                    <div key={element.id} className="space-y-2">
+                                      <div
+                                        className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${isElementSelected ? 'bg-primary/10 border-primary/20 border-2 shadow-sm' : 'bg-muted/30 border border-transparent shadow-none hover:bg-muted/50'}`}
+                                        onClick={() => onSelectElement(element.id)}
+                                      >
+                                        <div className="w-16 h-16 rounded-lg border bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                                          {element.type === 'image' && element.imageUrl ? (
+                                            <img
+                                              src={element.imageUrl}
+                                              alt="Thumbnail"
+                                              className="w-full h-full object-contain"
+                                              style={{ imageRendering: 'auto' }}
+                                            />
+                                          ) : element.type === 'text' ? (
+                                            <div className="flex flex-col items-center justify-center w-full h-full bg-white">
+                                              <span className="text-sm font-bold text-primary leading-none">T</span>
+                                              <div className="w-full h-[2px] bg-primary/20 mt-1" />
+                                            </div>
+                                          ) : (
+                                            <Square className="w-6 h-6 text-muted-foreground" />
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-xs font-bold truncate">
+                                            {element.type === 'text' ? (element.text || 'Text') : (element.name || (element.type === 'image' ? 'Image' : element.shapeType || 'Shape'))}
+                                          </p>
+                                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
+                                            {element.width ? `${(element.width / (PX_PER_INCH || 96)).toFixed(1)}" × ${(element.height / (PX_PER_INCH || 96)).toFixed(1)}"` : 'Asset'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                              {/* Design Upload for Placeholder Section on Desktop when no elements */}
+                              {!elementsByPlaceholder[placeholder.id]?.length && (
+                                <div className="pt-2">
+                                  <PropertiesPanel
+                                    selectedPlaceholderId={placeholder.id}
+                                    placeholders={placeholders}
+                                    designUrlsByPlaceholder={designUrlsByPlaceholder}
+                                    onDesignUpload={onDesignUpload || (() => { })}
+                                    onDesignRemove={onDesignRemove}
+                                    displacementSettings={displacementSettings || { scaleX: 10, scaleY: 10, contrastBoost: 1.5 }}
+                                    onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
+                                    selectedElementIds={[]}
+                                    elements={elements}
+                                    onElementUpdate={() => { }}
+                                    onElementDelete={() => { }}
+                                    PX_PER_INCH={PX_PER_INCH}
+                                    canvasPadding={canvasPadding}
+                                  />
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       </AccordionContent>
                     </AccordionItem>
@@ -6188,8 +6714,9 @@ const ShapesPanel: React.FC<{
   onAddShape: (shapeType: CanvasElement['shapeType']) => void;
   onAddAsset?: (assetUrl: string, assetName?: string) => void;
   selectedPlaceholderId: string | null;
+  selectedPlaceholderName?: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
-}> = ({ onAddShape, onAddAsset, selectedPlaceholderId, placeholders }) => {
+}> = ({ onAddShape, onAddAsset, selectedPlaceholderId, selectedPlaceholderName, placeholders }) => {
   const [shapeAssets, setShapeAssets] = useState<any[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
 
@@ -6222,13 +6749,14 @@ const ShapesPanel: React.FC<{
   }, []);
 
   return (
-    <div className='flex flex-col gap-4'>
-      <div className="p-4 space-y-4">
+    <div className="flex flex-col h-full">
+      {/* Static top section — placeholder indicator + Basic Shapes */}
+      <div className="p-4 pb-2 space-y-3 flex-shrink-0">
         {placeholders.length > 1 && (
           <div className="p-3 bg-muted rounded-lg border">
             <Label className="text-xs font-semibold text-foreground mb-1 block">
               {selectedPlaceholderId
-                ? `Placeholder Selected: ${selectedPlaceholderId.slice(0, 8)}...`
+                ? `Selected: ${selectedPlaceholderName || selectedPlaceholderId.slice(0, 8)}`
                 : 'Select a placeholder on canvas first'}
             </Label>
             <p className="text-xs text-muted-foreground">
@@ -6238,15 +6766,15 @@ const ShapesPanel: React.FC<{
             </p>
           </div>
         )}
-        <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">
+        <Label className="text-xs font-semibold uppercase text-muted-foreground block">
           Basic Shapes
         </Label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => onAddShape('rect')}
-            className="h-16 flex flex-col gap-1"
+            className="h-14 flex flex-col gap-1"
           >
             <Square className="w-5 h-5" />
             <span className="text-xs">Rectangle</span>
@@ -6255,7 +6783,7 @@ const ShapesPanel: React.FC<{
             variant="outline"
             size="sm"
             onClick={() => onAddShape('circle')}
-            className="h-16 flex flex-col gap-1"
+            className="h-14 flex flex-col gap-1"
           >
             <CircleIcon className="w-5 h-5" />
             <span className="text-xs">Circle</span>
@@ -6264,7 +6792,7 @@ const ShapesPanel: React.FC<{
             variant="outline"
             size="sm"
             onClick={() => onAddShape('triangle')}
-            className="h-16 flex flex-col gap-1"
+            className="h-14 flex flex-col gap-1"
           >
             <Triangle className="w-5 h-5" />
             <span className="text-xs">Triangle</span>
@@ -6273,7 +6801,7 @@ const ShapesPanel: React.FC<{
             variant="outline"
             size="sm"
             onClick={() => onAddShape('star')}
-            className="h-16 flex flex-col gap-1"
+            className="h-14 flex flex-col gap-1"
           >
             <StarIcon className="w-5 h-5" />
             <span className="text-xs">Star</span>
@@ -6282,78 +6810,65 @@ const ShapesPanel: React.FC<{
             variant="outline"
             size="sm"
             onClick={() => onAddShape('heart')}
-            className="h-16 flex flex-col gap-1"
+            className="h-14 flex flex-col gap-1"
           >
             <Heart className="w-5 h-5" />
             <span className="text-xs">Heart</span>
           </Button>
         </div>
-      </div>
-      <div className='p-2 space-y-4'>
-        {placeholders.length > 1 && (
-          <div className="p-2 bg-muted rounded-lg border mb-2">
-            <Label className="text-xs font-semibold text-foreground mb-1 block">
-              {selectedPlaceholderId
-                ? `Placeholder Selected: ${selectedPlaceholderId.slice(0, 8)}...`
-                : 'Select a placeholder on canvas first'}
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              {selectedPlaceholderId
-                ? 'Click a shape below to add it to the selected placeholder'
-                : 'Click a placeholder on the canvas, then select a shape'}
-            </p>
-          </div>
-        )}
-        <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">
+
+        <Label className="text-xs font-semibold uppercase text-muted-foreground block pt-1">
           Uploaded Shapes
         </Label>
-        {loadingAssets ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-          </div>
-        ) : shapeAssets.length > 0 ? (
-          <ScrollArea className="h-[300px]">
-            <div className="grid grid-cols-2 gap-2">
-              {shapeAssets.map((asset) => (
-                <div
-                  key={asset._id}
-                  className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (asset.fileUrl && onAddAsset) {
-                      onAddAsset(asset.fileUrl, asset.title);
-                    } else if (asset.fileUrl) {
-                      toast.error('Asset handler not available');
-                    }
-                  }}
-                  title={asset.title}
-                >
-                  {asset.previewUrl ? (
-                    <img
-                      src={asset.previewUrl}
-                      alt={asset.title}
-                      className="w-full h-full object-contain p-2"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Folder className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                    <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                      {asset.title}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        ) : (
-          <div className="text-center py-4 text-muted-foreground text-sm">
-            No shape assets found
-          </div>
-        )}
       </div>
+
+      {/* Scrollable uploaded shapes grid */}
+      {loadingAssets ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+        </div>
+      ) : shapeAssets.length > 0 ? (
+        <ScrollArea className="flex-1 min-h-0 px-4 pb-4">
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {shapeAssets.map((asset) => (
+              <div
+                key={asset._id}
+                className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (asset.fileUrl && onAddAsset) {
+                    onAddAsset(asset.fileUrl, asset.title);
+                  } else if (asset.fileUrl) {
+                    toast.error('Asset handler not available');
+                  }
+                }}
+                title={asset.title}
+              >
+                {asset.previewUrl ? (
+                  <img
+                    src={asset.previewUrl}
+                    alt={asset.title}
+                    className="w-full h-full object-contain p-1.5"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Folder className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end justify-center pb-1">
+                  <span className="text-white text-[9px] font-medium opacity-0 group-hover:opacity-100 transition-opacity text-center px-1 leading-tight truncate w-full">
+                    {asset.title}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+          No shape assets found
+        </div>
+      )}
     </div>
   );
 };
@@ -6362,8 +6877,10 @@ const ShapesPanel: React.FC<{
 const GraphicsPanel: React.FC<{
   onAddAsset: (assetUrl: string, assetName?: string) => void;
   selectedPlaceholderId: string | null;
+  selectedPlaceholderName?: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
-}> = ({ onAddAsset, selectedPlaceholderId, placeholders }) => {
+  isMobile?: boolean;
+}> = ({ onAddAsset, selectedPlaceholderId, selectedPlaceholderName, placeholders, isMobile = false }) => {
   const [graphics, setGraphics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -6397,80 +6914,56 @@ const GraphicsPanel: React.FC<{
     fetchGraphics();
   }, [searchTerm]);
 
+
+  const cols = isMobile ? 'grid-cols-3' : 'grid-cols-2';
+  const imgPad = isMobile ? 'p-1.5' : 'p-2';
+  const folderSz = isMobile ? 'w-6 h-6' : 'w-8 h-8';
+
+  const assetGrid = (
+    <div className={`grid ${cols} gap-2 ${isMobile ? 'pt-1' : ''}`}>
+      {graphics.map((asset) => (
+        <div key={asset._id} className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
+          onClick={(e) => { e.stopPropagation(); if (asset.fileUrl) { onAddAsset(asset.fileUrl, asset.title); } else { toast.error('Asset file URL not available'); } }}
+          title={asset.title}>
+          {asset.previewUrl ? (<img src={asset.previewUrl} alt={asset.title} className={`w-full h-full object-contain ${imgPad}`} />) : (<div className="w-full h-full flex items-center justify-center"><Folder className={`${folderSz} text-muted-foreground`} /></div>)}
+          <div className={`absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex ${isMobile ? 'items-end justify-center pb-1' : 'items-center justify-center'}`}>
+            <span className={`text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity ${isMobile ? 'text-[9px] text-center px-1 leading-tight truncate w-full' : 'text-xs'}`}>{asset.title}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const placeholderNotice = placeholders.length > 1 ? (
+    <div className="p-3 bg-muted rounded-lg border">
+      <Label className="text-xs font-semibold text-foreground mb-1 block">{selectedPlaceholderId ? `Selected: ${selectedPlaceholderName || selectedPlaceholderId.slice(0, 8)}` : 'Select a placeholder on canvas first'}</Label>
+      <p className="text-xs text-muted-foreground">{selectedPlaceholderId ? 'Click a graphic below to add it to the selected placeholder' : 'Click a placeholder on the canvas, then select a graphic'}</p>
+    </div>
+  ) : null;
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4 pb-2 space-y-3 flex-shrink-0">
+          {placeholderNotice}
+          <Label className="text-xs font-semibold uppercase text-muted-foreground block">Graphics</Label>
+          <Input placeholder="Search graphics..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        </div>
+        {loading ? (<div className="flex-1 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>)
+          : graphics.length === 0 ? (<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">No graphics found</div>)
+            : (<ScrollArea className="flex-1 min-h-0 px-4 pb-4">{assetGrid}</ScrollArea>)}
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4">
-      {placeholders.length > 1 && (
-        <div className="p-3 bg-muted rounded-lg border">
-          <Label className="text-xs font-semibold text-foreground mb-1 block">
-            {selectedPlaceholderId
-              ? `Placeholder Selected: ${selectedPlaceholderId.slice(0, 8)}...`
-              : 'Select a placeholder on canvas first'}
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            {selectedPlaceholderId
-              ? 'Click a graphic below to add it to the selected placeholder'
-              : 'Click a placeholder on the canvas, then select a graphic'}
-          </p>
-        </div>
-      )}
-      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">
-        Graphics
-      </Label>
-
-      {/* Search */}
-      <Input
-        placeholder="Search graphics..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="mb-2"
-      />
-
-      {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : graphics.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground text-sm">
-          No graphics found
-        </div>
-      ) : (
-        <ScrollArea className="h-[500px]">
-          <div className="grid grid-cols-2 gap-2">
-            {graphics.map((asset) => (
-              <div
-                key={asset._id}
-                className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (asset.fileUrl) {
-                    onAddAsset(asset.fileUrl, asset.title);
-                  } else {
-                    toast.error('Asset file URL not available');
-                  }
-                }}
-                title={asset.title}
-              >
-                {asset.previewUrl ? (
-                  <img
-                    src={asset.previewUrl}
-                    alt={asset.title}
-                    className="w-full h-full object-contain p-2"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Folder className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                  <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                    {asset.title}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
+      {placeholderNotice}
+      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Graphics</Label>
+      <Input placeholder="Search graphics..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="mb-2" />
+      {loading ? (<div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>)
+        : graphics.length === 0 ? (<div className="flex-1 flex items-center justify-center py-20 text-muted-foreground text-sm h-[300px]">No graphics found</div>)
+          : (<ScrollArea className="flex-1 min-h-[300px]">{assetGrid}</ScrollArea>)}
     </div>
   );
 };
@@ -6478,8 +6971,10 @@ const GraphicsPanel: React.FC<{
 const LogosPanel: React.FC<{
   onAddAsset: (assetUrl: string, assetName?: string) => void;
   selectedPlaceholderId: string | null;
+  selectedPlaceholderName?: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
-}> = ({ onAddAsset, selectedPlaceholderId, placeholders }) => {
+  isMobile?: boolean;
+}> = ({ onAddAsset, selectedPlaceholderId, selectedPlaceholderName, placeholders, isMobile = false }) => {
   const [logos, setLogos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -6513,80 +7008,55 @@ const LogosPanel: React.FC<{
     fetchLogos();
   }, [searchTerm]);
 
+  const cols = isMobile ? 'grid-cols-3' : 'grid-cols-2';
+  const imgPad = isMobile ? 'p-1.5' : 'p-2';
+  const folderSz = isMobile ? 'w-6 h-6' : 'w-8 h-8';
+
+  const logoGrid = (
+    <div className={`grid ${cols} gap-2 ${isMobile ? 'pt-1' : ''}`}>
+      {logos.map((asset) => (
+        <div key={asset._id} className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
+          onClick={(e) => { e.stopPropagation(); if (asset.fileUrl) { onAddAsset(asset.fileUrl, asset.title); } else { toast.error('Asset file URL not available'); } }}
+          title={asset.title}>
+          {asset.previewUrl ? (<img src={asset.previewUrl} alt={asset.title} className={`w-full h-full object-contain ${imgPad}`} />) : (<div className="w-full h-full flex items-center justify-center"><Folder className={`${folderSz} text-muted-foreground`} /></div>)}
+          <div className={`absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex ${isMobile ? 'items-end justify-center pb-1' : 'items-center justify-center'}`}>
+            <span className={`text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity ${isMobile ? 'text-[9px] text-center px-1 leading-tight truncate w-full' : 'text-xs'}`}>{asset.title}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const placeholderNotice = placeholders.length > 1 ? (
+    <div className="p-3 bg-muted rounded-lg border">
+      <Label className="text-xs font-semibold text-foreground mb-1 block">{selectedPlaceholderId ? `Selected: ${selectedPlaceholderName || selectedPlaceholderId.slice(0, 8)}` : 'Select a placeholder on canvas first'}</Label>
+      <p className="text-xs text-muted-foreground">{selectedPlaceholderId ? 'Click a logo below to add it to the selected placeholder' : 'Click a placeholder on the canvas, then select a logo'}</p>
+    </div>
+  ) : null;
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4 pb-2 space-y-3 flex-shrink-0">
+          {placeholderNotice}
+          <Label className="text-xs font-semibold uppercase text-muted-foreground block">Logos</Label>
+          <Input placeholder="Search logos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        </div>
+        {loading ? (<div className="flex-1 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>)
+          : logos.length === 0 ? (<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">No logos found</div>)
+            : (<ScrollArea className="flex-1 min-h-0 px-4 pb-4">{logoGrid}</ScrollArea>)}
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4">
-      {placeholders.length > 1 && (
-        <div className="p-3 bg-muted rounded-lg border">
-          <Label className="text-xs font-semibold text-foreground mb-1 block">
-            {selectedPlaceholderId
-              ? `Placeholder Selected: ${selectedPlaceholderId.slice(0, 8)}...`
-              : 'Select a placeholder on canvas first'}
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            {selectedPlaceholderId
-              ? 'Click a logo below to add it to the selected placeholder'
-              : 'Click a placeholder on the canvas, then select a logo'}
-          </p>
-        </div>
-      )}
-      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">
-        Logos
-      </Label>
-
-      {/* Search */}
-      <Input
-        placeholder="Search logos..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="mb-2"
-      />
-
-      {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : logos.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground text-sm">
-          No logos found
-        </div>
-      ) : (
-        <ScrollArea className="h-[500px]">
-          <div className="grid grid-cols-2 gap-2">
-            {logos.map((asset) => (
-              <div
-                key={asset._id}
-                className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (asset.fileUrl) {
-                    onAddAsset(asset.fileUrl, asset.title);
-                  } else {
-                    toast.error('Asset file URL not available');
-                  }
-                }}
-                title={asset.title}
-              >
-                {asset.previewUrl ? (
-                  <img
-                    src={asset.previewUrl}
-                    alt={asset.title}
-                    className="w-full h-full object-contain p-2"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Folder className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                  <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                    {asset.title}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
+      {placeholderNotice}
+      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Logos</Label>
+      <Input placeholder="Search logos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="mb-2" />
+      {loading ? (<div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>)
+        : logos.length === 0 ? (<div className="flex-1 flex items-center justify-center py-20 text-muted-foreground text-sm h-[300px]">No logos found</div>)
+          : (<ScrollArea className="flex-1 min-h-[300px]">{logoGrid}</ScrollArea>)}
     </div>
   );
 };
@@ -6594,10 +7064,12 @@ const LogosPanel: React.FC<{
 interface LibraryPanelProps {
   onAddAsset: (assetUrl: string, assetName?: string) => void;
   selectedPlaceholderId?: string | null;
+  selectedPlaceholderName?: string | null;
   placeholders?: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
+  isMobile?: boolean;
 }
 
-const LibraryPanel: React.FC<LibraryPanelProps> = ({ onAddAsset, selectedPlaceholderId, placeholders = [] }) => {
+const LibraryPanel: React.FC<LibraryPanelProps> = ({ onAddAsset, selectedPlaceholderId, selectedPlaceholderName, placeholders = [], isMobile = false }) => {
   const [assets, setAssets] = useState<any[]>([]);
   const [allAssets, setAllAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -6673,113 +7145,67 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ onAddAsset, selectedPlaceho
     fetchAllAssets();
   }, []);
 
+  const cols = isMobile ? 'grid-cols-3' : 'grid-cols-2';
+  const imgPad = isMobile ? 'p-1.5' : 'p-2';
+  const folderSz = isMobile ? 'w-6 h-6' : 'w-8 h-8';
+
+  const assetsToDisplay = selectedCategory === 'all' ? allAssets : assets;
+  const filteredAssets = searchTerm
+    ? assetsToDisplay.filter((a) => a.title?.toLowerCase().includes(searchTerm.toLowerCase()))
+    : assetsToDisplay;
+
+  const placeholderNotice = placeholders.length > 1 ? (
+    <div className="p-3 bg-muted rounded-lg border">
+      <Label className="text-xs font-semibold text-foreground mb-1 block">{selectedPlaceholderId ? `Selected: ${selectedPlaceholderName || selectedPlaceholderId.slice(0, 8)}` : 'Select a placeholder on canvas first'}</Label>
+      <p className="text-xs text-muted-foreground">{selectedPlaceholderId ? 'Click an asset below to add it to the selected placeholder' : 'Click a placeholder on the canvas, then select an asset'}</p>
+    </div>
+  ) : null;
+
+  const categoryTabs = (
+    <div className="flex gap-1 flex-wrap">
+      {categories.map((cat) => (<Button key={cat.value} variant={selectedCategory === cat.value ? 'default' : 'outline'} size="sm" onClick={() => setSelectedCategory(cat.value)} className="text-xs h-7 px-2">{cat.label}</Button>))}
+    </div>
+  );
+
+  const assetGrid = (
+    <div className={`grid ${cols} gap-2 ${isMobile ? 'pt-1' : ''}`}>
+      {filteredAssets.map((asset) => (
+        <div key={asset._id} className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
+          onClick={(e) => { e.stopPropagation(); if (asset.fileUrl) { onAddAsset(asset.fileUrl, asset.title); } else { toast.error('Asset file URL not available'); } }}
+          title={asset.title}>
+          {asset.previewUrl ? (<img src={asset.previewUrl} alt={asset.title} className={`w-full h-full object-contain ${imgPad}`} />) : (<div className="w-full h-full flex items-center justify-center"><Folder className={`${folderSz} text-muted-foreground`} /></div>)}
+          <div className={`absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex ${isMobile ? 'items-end justify-center pb-1' : 'items-center justify-center'}`}>
+            <span className={`text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity ${isMobile ? 'text-[9px] text-center px-1 leading-tight truncate w-full' : 'text-xs'}`}>{asset.title}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const emptyMsg = <div className={`flex items-center justify-center text-muted-foreground text-sm ${isMobile ? 'flex-1' : 'py-20 min-h-[300px]'}`}>No assets found</div>;
+  const spinner = <div className={`flex items-center justify-center ${isMobile ? 'flex-1' : 'py-8'}`}><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4 pb-2 space-y-3 flex-shrink-0">
+          {placeholderNotice}
+          <Label className="text-xs font-semibold uppercase text-muted-foreground block">Asset Library</Label>
+          <Input placeholder="Search assets..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          {categoryTabs}
+        </div>
+        {loading ? spinner : filteredAssets.length === 0 ? emptyMsg : (<ScrollArea className="flex-1 min-h-0 px-4 pb-4">{assetGrid}</ScrollArea>)}
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4">
-      {placeholders.length > 1 && (
-        <div className="p-3 bg-muted rounded-lg border">
-          <Label className="text-xs font-semibold text-foreground mb-1 block">
-            {selectedPlaceholderId
-              ? `Placeholder Selected: ${selectedPlaceholderId.slice(0, 8)}...`
-              : 'Select a placeholder on canvas first'}
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            {selectedPlaceholderId
-              ? 'Click an asset below to add it to the selected placeholder'
-              : 'Click a placeholder on the canvas, then select an asset'}
-          </p>
-        </div>
-      )}
-      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">
-        Asset Library
-      </Label>
-
-      {/* Search */}
-      <Input
-        placeholder="Search assets..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="mb-2"
-      />
-
-      {/* Category tabs */}
-      <div className="flex gap-1 flex-wrap">
-        {categories.map((cat) => (
-          <Button
-            key={cat.value}
-            variant={selectedCategory === cat.value ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSelectedCategory(cat.value)}
-            className="text-xs"
-          >
-            {cat.label}
-          </Button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : (() => {
-        // Determine which assets to display
-        const assetsToDisplay = selectedCategory === 'all' ? allAssets : assets;
-
-        // Filter by search term if provided
-        const filteredAssets = searchTerm
-          ? assetsToDisplay.filter((asset) =>
-            asset.title?.toLowerCase().includes(searchTerm.toLowerCase())
-          )
-          : assetsToDisplay;
-
-        if (filteredAssets.length === 0) {
-          return (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              No assets found
-            </div>
-          );
-        }
-
-        return (
-          <ScrollArea className="h-[500px]">
-            <div className="grid grid-cols-2 gap-2">
-              {filteredAssets.map((asset) => (
-                <div
-                  key={asset._id}
-                  className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (asset.fileUrl) {
-                      onAddAsset(asset.fileUrl, asset.title);
-                    } else {
-                      toast.error('Asset file URL not available');
-                    }
-                  }}
-                  title={asset.title}
-                >
-                  {asset.previewUrl ? (
-                    <img
-                      src={asset.previewUrl}
-                      alt={asset.title}
-                      className="w-full h-full object-contain p-2"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Folder className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                  )}
-
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                    <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                      {asset.title}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        );
-      })()}
-
+      {placeholderNotice}
+      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Asset Library</Label>
+      <Input placeholder="Search assets..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="mb-2" />
+      {categoryTabs}
+      {loading ? spinner : filteredAssets.length === 0 ? emptyMsg : (<ScrollArea className="flex-1 min-h-[300px]">{assetGrid}</ScrollArea>)}
     </div>
   );
 };
@@ -6789,10 +7215,12 @@ interface AssetPanelProps {
   category: string;
   title: string;
   selectedPlaceholderId: string | null;
+  selectedPlaceholderName?: string | null;
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number }>;
+  isMobile?: boolean;
 }
 
-const AssetPanel: React.FC<AssetPanelProps> = ({ onAddAsset, category, title, selectedPlaceholderId, placeholders }) => {
+const AssetPanel: React.FC<AssetPanelProps> = ({ onAddAsset, category, title, selectedPlaceholderId, selectedPlaceholderName, placeholders, isMobile = false }) => {
   const [assets, setAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -6826,86 +7254,60 @@ const AssetPanel: React.FC<AssetPanelProps> = ({ onAddAsset, category, title, se
     fetchAssets();
   }, [category, searchTerm, title]);
 
+  const cols = isMobile ? 'grid-cols-3' : 'grid-cols-2';
+  const imgPad = isMobile ? 'p-1.5' : 'p-2';
+  const folderSz = isMobile ? 'w-6 h-6' : 'w-8 h-8';
+
+  const placeholderNotice = placeholders.length > 1 ? (
+    <div className="p-3 bg-muted rounded-lg border">
+      <Label className="text-xs font-semibold text-foreground mb-1 block">{selectedPlaceholderId ? `Selected: ${selectedPlaceholderName || selectedPlaceholderId.slice(0, 8)}` : 'Select a placeholder on canvas first'}</Label>
+      <p className="text-xs text-muted-foreground">{selectedPlaceholderId ? `Click a ${title.toLowerCase()} below to add it to the selected placeholder` : 'Click a placeholder on the canvas, then select a resource'}</p>
+    </div>
+  ) : null;
+
+  const renderGrid = () => (
+    <div className={`grid ${cols} gap-2 ${isMobile ? 'pt-1' : ''}`}>
+      {assets.map((asset) => (
+        <div key={asset._id} className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
+          onClick={(e) => { e.stopPropagation(); if (asset.fileUrl) { onAddAsset(asset.fileUrl, asset.title); } else { toast.error('Asset file URL not available'); } }}
+          title={asset.title}>
+          {asset.previewUrl ? (<img src={asset.previewUrl} alt={asset.title} className={`w-full h-full object-contain ${imgPad}`} />) : (<div className="w-full h-full flex items-center justify-center"><Folder className={`${folderSz} text-muted-foreground`} /></div>)}
+          <div className={`absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex ${isMobile ? 'items-end justify-center pb-1' : 'items-center justify-center'}`}>
+            <span className={`text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity ${isMobile ? 'text-[9px] text-center px-1 leading-tight truncate w-full' : 'text-xs'}`}>{asset.title}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4 pb-2 space-y-3 flex-shrink-0">
+          {placeholderNotice}
+          <Label className="text-xs font-semibold uppercase text-muted-foreground block">{title}</Label>
+          <Input placeholder={`Search ${title.toLowerCase()}...`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        </div>
+        {loading ? (<div className="flex-1 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>)
+          : assets.length === 0 ? (<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">No {title.toLowerCase()} found</div>)
+            : (<ScrollArea className="flex-1 min-h-0 px-4 pb-4">{renderGrid()}</ScrollArea>)}
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4">
-      {placeholders.length > 1 && (
-        <div className="p-3 bg-muted rounded-lg border">
-          <Label className="text-xs font-semibold text-foreground mb-1 block">
-            {selectedPlaceholderId
-              ? `Placeholder Selected: ${selectedPlaceholderId.slice(0, 8)}...`
-              : 'Select a placeholder on canvas first'}
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            {selectedPlaceholderId
-              ? `Click a ${title.toLowerCase()} below to add it to the selected placeholder`
-              : 'Click a placeholder on the canvas, then select a resource'}
-          </p>
-        </div>
-      )}
-      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">
-        {title}
-      </Label>
-
-      {/* Search */}
-      <Input
-        placeholder={`Search ${title.toLowerCase()}...`}
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="mb-2"
-      />
-
-      {/* Assets grid */}
-      {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : assets.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground text-sm">
-          No {title.toLowerCase()} found
-        </div>
-      ) : (
-        <ScrollArea className="h-[500px]">
-          <div className="grid grid-cols-2 gap-2">
-            {assets.map((asset) => (
-              <div
-                key={asset._id}
-                className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (asset.fileUrl) {
-                    onAddAsset(asset.fileUrl, asset.title);
-                  } else {
-                    toast.error('Asset file URL not available');
-                  }
-                }}
-                title={asset.title}
-              >
-                {asset.previewUrl ? (
-                  <img
-                    src={asset.previewUrl}
-                    alt={asset.title}
-                    className="w-full h-full object-contain p-2"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Folder className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                  <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                    {asset.title}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
+      {placeholderNotice}
+      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">{title}</Label>
+      <Input placeholder={`Search ${title.toLowerCase()}...`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="mb-2" />
+      {loading ? (<div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>)
+        : assets.length === 0 ? (<div className="flex-1 flex items-center justify-center py-20 text-muted-foreground text-sm h-[300px]">No {title.toLowerCase()} found</div>)
+          : (<ScrollArea className="flex-1 min-h-[300px]">{renderGrid()}</ScrollArea>)}
     </div>
   );
 };
 
-const TemplatesPanel: React.FC = () => {
+const TemplatesPanel: React.FC<{ isMobile?: boolean }> = ({ isMobile = false }) => {
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -6935,63 +7337,54 @@ const TemplatesPanel: React.FC = () => {
     fetchTemplates();
   }, []);
 
+  const cols = isMobile ? 'grid-cols-3' : 'grid-cols-2';
+  const imgPad = isMobile ? 'p-1.5' : 'p-2';
+  const layoutIconSz = isMobile ? 'w-5 h-5' : 'w-6 h-6';
+  const layoutIconSzLarge = isMobile ? 'w-6 h-6' : 'w-8 h-8';
+
+  const templateGrid = (
+    <div className={`grid ${cols} gap-2 ${isMobile ? 'pt-1' : ''}`}>
+      {templates.map((template) => (
+        <div key={template._id} className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
+          onClick={() => toast.info(`Add ${template.title} template functionality coming soon`)}
+          title={template.title}>
+          {template.previewUrl ? (<img src={template.previewUrl} alt={template.title} className={`w-full h-full object-contain ${imgPad}`} />) : (<div className="w-full h-full flex items-center justify-center"><Layout className={`${layoutIconSzLarge} text-muted-foreground`} /></div>)}
+          <div className={`absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex ${isMobile ? 'items-end justify-center pb-1' : 'items-center justify-center'}`}>
+            <span className={`text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity ${isMobile ? 'text-[9px] text-center px-1 leading-tight truncate w-full' : 'text-xs'}`}>{template.title}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const emptyState = (
+    <div className={`flex flex-col items-center justify-center space-y-3 ${isMobile ? 'flex-1' : 'py-10 min-h-[300px]'}`}>
+      <div className={`grid ${cols} gap-2 w-full max-w-[240px]`}>
+        {[0, 1].map((i) => (<div key={i} className="aspect-square bg-muted rounded-lg border-2 border-dashed flex items-center justify-center"><Layout className={`${layoutIconSz} text-muted-foreground`} /></div>))}
+      </div>
+      <p className="text-center text-xs text-muted-foreground">No templates available. Upload some in Admin panel.</p>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4 pb-2 flex-shrink-0">
+          <Label className="text-xs font-semibold uppercase text-muted-foreground block">Templates</Label>
+        </div>
+        {loading ? (<div className="flex-1 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>)
+          : templates.length === 0 ? emptyState
+            : (<ScrollArea className="flex-1 min-h-0 px-4 pb-4">{templateGrid}</ScrollArea>)}
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4">
-      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">
-        Templates
-      </Label>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : templates.length === 0 ? (
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="aspect-square bg-muted rounded-lg border-2 border-dashed flex items-center justify-center">
-              <Layout className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <div className="aspect-square bg-muted rounded-lg border-2 border-dashed flex items-center justify-center">
-              <Layout className="w-6 h-6 text-muted-foreground" />
-            </div>
-          </div>
-          <p className="text-center text-xs text-muted-foreground py-4">
-            No templates available. Upload some in Admin panel.
-          </p>
-        </div>
-      ) : (
-        <ScrollArea className="h-[500px]">
-          <div className="grid grid-cols-2 gap-2">
-            {templates.map((template) => (
-              <div
-                key={template._id}
-                className="relative aspect-square bg-muted rounded-lg overflow-hidden border-2 border-border hover:border-primary cursor-pointer transition-colors group"
-                onClick={() => {
-                  toast.info(`Add ${template.title} template functionality coming soon`);
-                }}
-                title={template.title}
-              >
-                {template.previewUrl ? (
-                  <img
-                    src={template.previewUrl}
-                    alt={template.title}
-                    className="w-full h-full object-contain p-2"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Layout className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                  <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                    {template.title}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
+      <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Templates</Label>
+      {loading ? (<div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>)
+        : templates.length === 0 ? emptyState
+          : (<ScrollArea className="flex-1 min-h-[300px]">{templateGrid}</ScrollArea>)}
     </div>
   );
 };
