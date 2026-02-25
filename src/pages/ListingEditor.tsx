@@ -98,20 +98,23 @@ const ListingEditor = () => {
 
   // Initialize title and description from draft or state
   const [title, setTitle] = useState(() => {
-    return draftData?.title || state?.title || 'wyz Logo Circle Graphic T-Shirt | Minimal Branding Tee';
+    return state?.title || draftData?.title || '';
   });
   const [description, setDescription] = useState(() => {
-    return draftData?.description || state?.description || 'This relaxed-fit garment-dyed tee wears in like an old favorite...';
+    return state?.description || '';
   });
 
   // Update title/description when draft loads
   useEffect(() => {
     if (draftData) {
       if (draftData.title) setTitle(draftData.title);
-      if (draftData.description) setDescription(draftData.description);
+      // Only set description if it's not the catalog's size guide HTML
+      if (draftData.description && !draftData.description.includes('class="size-guide"')) {
+        setDescription(draftData.description);
+      }
     }
   }, [draftData]);
-  const [addSizeTable, setAddSizeTable] = useState(false);
+  // const [addSizeTable, setAddSizeTable] = useState(false); // Removed as per requirements
   const [personalizationEnabled, setPersonalizationEnabled] = useState(false);
   const [hideInStore, setHideInStore] = useState(false);
   const [syncTitle, setSyncTitle] = useState(true);
@@ -674,19 +677,10 @@ const ListingEditor = () => {
               id="description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              rows={6}
+              placeholder="Describe your product here... (e.g., This premium heavy-weight tee is made from 100% organic cotton, featuring a relaxed fit and durable double-stitch detailing. Perfect for a minimalist streetwear look.)"
+              className="min-h-[200px] resize-none focus:ring-primary/20 transition-all border-slate-200"
+              rows={8}
             />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="addSizeTable"
-              checked={addSizeTable}
-              onCheckedChange={(checked) => setAddSizeTable(!!checked)}
-            />
-            <Label htmlFor="addSizeTable" className="text-sm font-normal">
-              Add size table to description
-            </Label>
           </div>
         </Card>
 
