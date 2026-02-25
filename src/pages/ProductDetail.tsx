@@ -695,7 +695,7 @@ const ProductDetail = () => {
 
           {/* Product Description */}
           <ProductDescription
-            description={product.catalogue?.description}
+            sizeGuide={product.catalogue?.description}
             category={product.catalogue?.categoryId}
             subcategoryIds={product.catalogue?.subcategoryIds}
           />

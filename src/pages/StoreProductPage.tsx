@@ -1059,7 +1059,7 @@ const StoreProductPage = () => {
 
       <div className="mb-12">
         <ProductDescription
-          description={product.description}
+          sizeGuide={product.catalogProduct?.description}
           category={product.categoryId}
           subcategoryIds={product.subcategoryIds || []}
         />

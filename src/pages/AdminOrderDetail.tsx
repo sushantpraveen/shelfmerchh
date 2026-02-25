@@ -10,6 +10,55 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, ShoppingBag, Store as StoreIcon, Mail, Clock, Image as ImageIcon, Layers, Eye, Download } from 'lucide-react';
 import { Order } from '@/types';
 
+// Helper function to convert color name to hex code
+const getColorHex = (colorName: string): string => {
+  const colorMap: { [key: string]: string } = {
+    'black': '#000000',
+    'white': '#FFFFFF',
+    'red': '#FF0000',
+    'blue': '#0000FF',
+    'green': '#008000',
+    'yellow': '#FFFF00',
+    'orange': '#FFA500',
+    'purple': '#800080',
+    'pink': '#FFC0CB',
+    'brown': '#A52A2A',
+    'grey': '#808080',
+    'gray': '#808080',
+    'navy': '#000080',
+    'maroon': '#800000',
+    'olive': '#808000',
+    'lime': '#00FF00',
+    'aqua': '#00FFFF',
+    'teal': '#008080',
+    'silver': '#C0C0C0',
+    'gold': '#FFD700',
+    'beige': '#F5F5DC',
+    'tan': '#D2B48C',
+    'khaki': '#F0E68C',
+    'coral': '#FF7F50',
+    'salmon': '#FA8072',
+    'turquoise': '#40E0D0',
+    'lavender': '#E6E6FA',
+    'ivory': '#FFFFF0',
+    'cream': '#FFFDD0',
+    'mint': '#98FF98',
+    'peach': '#FFE5B4',
+    'cerulean frost': '#6D9BC3',
+    'cerulean': '#6D9BC3',
+    'cobalt blue': '#0047AB',
+    'amber': '#FFBF00',
+    'frosted': '#E8E8E8',
+    'natural': '#FAF0E6',
+    'beige-gray': '#9F9F9F',
+    'clear': '#FFFFFF',
+    'kraft': '#D4A574',
+  };
+
+  const normalized = colorName.toLowerCase().trim();
+  return colorMap[normalized] || '#CCCCCC';
+};
+
 const AdminOrderDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -107,6 +156,29 @@ const AdminOrderDetail = () => {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '-';
     return d.toLocaleString();
+  };
+
+  const handleDownloadOriginal = async (url: string, fileName: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Download failed:', err);
+      // Fallback to simple anchor if fetch fails (e.g. CORS)
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.target = '_blank';
+      link.click();
+    }
   };
 
   const storeName = order && (order as any).storeId && typeof (order as any).storeId === 'object'
@@ -225,27 +297,85 @@ const AdminOrderDetail = () => {
                     </TableHeader>
                     <TableBody>
                       {order.items.map((item: any, idx: number) => {
-                        const variant = item.variantName || item.variant;
+                        const itemVariant = item.variantName || item.variant;
+                        const spId = getStoreProductIdFromItem(item);
+                        const storeProduct = spId ? storeProductsById[spId] : null;
 
-                        let variantLabel: string;
-                        if (!variant) {
-                          variantLabel = '-';
-                        } else if (typeof variant === 'string') {
-                          variantLabel = variant;
-                        } else if (typeof variant === 'object') {
-                          // Format objects like { color, size } into a readable string
-                          const entries = Object.entries(variant).filter(([_, v]) => v != null && v !== '');
-                          variantLabel = entries.length
-                            ? entries.map(([k, v]) => `${k}: ${v}`).join(', ')
-                            : '[variant]';
-                        } else {
-                          variantLabel = String(variant);
+                        // Parse variant into an object if it's a string like "Color: Black, Size: L"
+                        let variantObj: Record<string, any> | null = null;
+                        if (typeof itemVariant === 'object') {
+                          variantObj = itemVariant;
+                        } else if (typeof itemVariant === 'string') {
+                          if (itemVariant.includes(':')) {
+                            variantObj = {};
+                            itemVariant.split(',').forEach(part => {
+                              const [k, v] = part.split(':').map(s => s.trim());
+                              if (k && v) variantObj![k] = v;
+                            });
+                          } else if (itemVariant.includes('/')) {
+                            // Handle "Color / Size" format
+                            const parts = itemVariant.split('/').map(s => s.trim());
+                            if (parts.length >= 2) {
+                              variantObj = { Color: parts[0], Size: parts[1] };
+                            }
+                          }
                         }
+
+                        let colorHex = '';
+                        const colorName = variantObj?.color || variantObj?.Color;
+                        if (colorName) {
+                          if (storeProduct) {
+                            // Try store product variants
+                            const foundVariant = storeProduct.variants?.find(
+                              (v: any) => (v.color || '').toLowerCase() === colorName.toLowerCase()
+                            );
+                            colorHex = foundVariant?.colorHex || '';
+
+                            // Try catalog product variants if still empty
+                            if (!colorHex && storeProduct.catalogProduct?.variants) {
+                              const foundCatalog = storeProduct.catalogProduct.variants.find(
+                                (v: any) => (v.color || '').toLowerCase() === colorName.toLowerCase()
+                              );
+                              colorHex = foundCatalog?.colorHex || '';
+                            }
+                          }
+
+                          // Fallback to internal map if still empty
+                          if (!colorHex) {
+                            colorHex = getColorHex(colorName);
+                          }
+                        }
+
+                        const renderVariant = () => {
+                          if (!variantObj) return <span>{String(itemVariant || '-')}</span>;
+
+                          const entries = Object.entries(variantObj).filter(([k, v]) => v != null && v !== '');
+                          return (
+                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                              {entries.map(([k, v], i) => {
+                                const isColor = k.toLowerCase() === 'color';
+                                return (
+                                  <span key={i} className="flex items-center gap-1.5 capitalize">
+                                    <span className="text-muted-foreground">{k}:</span>
+                                    {isColor && colorHex && (
+                                      <div
+                                        className="w-4 h-4 rounded-full border border-border/50 shadow-sm"
+                                        style={{ backgroundColor: colorHex }}
+                                        title={String(v)}
+                                      />
+                                    )}
+                                    <span className="font-medium text-foreground">{String(v)}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        };
 
                         return (
                           <TableRow key={idx}>
                             <TableCell className="font-medium">{item.productName || item.name || 'Product'}</TableCell>
-                            <TableCell>{variantLabel}</TableCell>
+                            <TableCell>{renderVariant()}</TableCell>
                             <TableCell>{item.quantity ?? 1}</TableCell>
                             <TableCell>{formatCurrency(item.price)}</TableCell>
                             <TableCell>{formatCurrency((item.price || 0) * (item.quantity || 1))}</TableCell>
@@ -380,11 +510,30 @@ const AdminOrderDetail = () => {
                                                 <Badge variant="outline" className="text-xs">
                                                   {el.type}
                                                 </Badge>
-                                                {el.id && (
-                                                  <span className="text-muted-foreground">
-                                                    #{el.id.slice(0, 6)}
-                                                  </span>
-                                                )}
+                                                <div className="flex items-center gap-2">
+                                                  {el.id && (
+                                                    <span className="text-muted-foreground">
+                                                      #{el.id.slice(0, 6)}
+                                                    </span>
+                                                  )}
+                                                  {el.type === 'image' && el.imageUrl && (
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="h-6 w-6"
+                                                      title="Download original design (High Quality)"
+                                                      onClick={() => {
+                                                        const ext = el.imageUrl.split('.').pop()?.split('?')[0] || 'png';
+                                                        handleDownloadOriginal(
+                                                          el.imageUrl,
+                                                          `order-${orderId}-element-${el.id || elIdx}.${ext}`
+                                                        );
+                                                      }}
+                                                    >
+                                                      <Download className="h-3 w-3" />
+                                                    </Button>
+                                                  )}
+                                                </div>
                                               </div>
                                               {el.type === 'text' && el.text && (
                                                 <p className="mt-1 truncate">{el.text}</p>
@@ -411,9 +560,28 @@ const AdminOrderDetail = () => {
                                             <div key={placeholderId} className="text-xs bg-background p-2 rounded border">
                                               <div className="flex items-center justify-between mb-1">
                                                 <Badge variant="outline" className="text-xs">placeholder</Badge>
-                                                <span className="text-muted-foreground">
-                                                  #{placeholderId.slice(0, 6)}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-muted-foreground">
+                                                    #{placeholderId.slice(0, 6)}
+                                                  </span>
+                                                  {url && (
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="h-6 w-6"
+                                                      title="Download original design (High Quality)"
+                                                      onClick={() => {
+                                                        const ext = url.split('.').pop()?.split('?')[0] || 'png';
+                                                        handleDownloadOriginal(
+                                                          url,
+                                                          `order-${orderId}-element-${placeholderId}.${ext}`
+                                                        );
+                                                      }}
+                                                    >
+                                                      <Download className="h-3 w-3" />
+                                                    </Button>
+                                                  )}
+                                                </div>
                                               </div>
                                               {url && (
                                                 <img
@@ -466,10 +634,43 @@ const AdminOrderDetail = () => {
                                 <Layers className="h-4 w-4" />
                                 Elements
                               </h5>
-                              <div className="border rounded-lg bg-muted/50 p-3">
-                                <p className="text-sm text-muted-foreground">
-                                  {elements.length} element(s)
-                                </p>
+                              <div className="border rounded-lg bg-muted/50 p-3 space-y-2">
+                                {elements.length > 0 ? (
+                                  elements.map((el: any, elIdx: number) => (
+                                    <div key={elIdx} className="text-xs bg-background p-2 rounded border flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        {el.type === 'image' && el.imageUrl && (
+                                          <img src={el.imageUrl} className="h-8 w-8 object-contain rounded border" alt="" />
+                                        )}
+                                        <div>
+                                          <p className="font-medium capitalize">{el.type}</p>
+                                          {el.id && <p className="text-[10px] text-muted-foreground">#{el.id.slice(0, 6)}</p>}
+                                        </div>
+                                      </div>
+                                      {el.type === 'image' && el.imageUrl && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8"
+                                          title="Download original design (High Quality)"
+                                          onClick={() => {
+                                            const ext = el.imageUrl.split('.').pop()?.split('?')[0] || 'png';
+                                            handleDownloadOriginal(
+                                              el.imageUrl,
+                                              `order-${orderId}-element-${el.id || elIdx}.${ext}`
+                                            );
+                                          }}
+                                        >
+                                          <Download className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-muted-foreground text-center py-2 text-sm">
+                                    No detailed elements
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </div>

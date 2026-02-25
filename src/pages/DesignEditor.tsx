@@ -2726,7 +2726,6 @@ const DesignEditor: React.FC = () => {
         },
         // Optional: include basic product info if available
         title: product?.catalogue?.name,
-        description: product?.catalogue?.description,
       };
 
       const draftResponse = await storeProductsApi.create(draftPayload);
@@ -2752,7 +2751,7 @@ const DesignEditor: React.FC = () => {
 
       // Navigate to MockupsLibrary if sample mockups exist
       if (hasSampleMockups) {
-        toast.success('Proceeding to library to select mockups.');
+        // toast.success('Proceeding to library to select mockups.');
 
         navigate('/mockups-library', {
           state: {
@@ -2760,7 +2759,6 @@ const DesignEditor: React.FC = () => {
             productId: catalogProductId,
             baseSellingPrice: sellingPrice,
             title: product?.catalogue?.name,
-            description: product?.catalogue?.description,
             galleryImages,
             designData: designPayload,
             variants: listingVariants,
@@ -2778,7 +2776,6 @@ const DesignEditor: React.FC = () => {
             productId: catalogProductId,
             baseSellingPrice: sellingPrice,
             title: product?.catalogue?.name,
-            description: product?.catalogue?.description,
             galleryImages,
             designData: designPayload,
             variants: listingVariants,
