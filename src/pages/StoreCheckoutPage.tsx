@@ -553,10 +553,11 @@ const StoreCheckoutPage: React.FC = () => {
   if (!store) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background px-6 text-center">
-        <h1 className="text-3xl font-bold mb-3">Checkout unavailable</h1>
-        <p className="text-muted-foreground mb-6">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <h1 className="text-3xl font-bold mb-3">Proceeding to Checkout</h1>
+        {/* <p className="text-muted-foreground mb-6">
           The store you are trying to access is not available at the moment.
-        </p>
+        </p> */}
         <Button asChild>
           <Link to="/">Go back to ShelfMerch</Link>
         </Button>
@@ -578,19 +579,19 @@ const StoreCheckoutPage: React.FC = () => {
 
   return (
     <StoreLayout store={store}>
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <div>
+      <div className="container mx-auto px-4">
+        {/* <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4"> */}
+          {/* <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Secure Checkout</p>
             <h1 className="text-3xl font-bold" style={{ fontFamily: theme.fonts.heading }}>
               {store.storeName}
             </h1>
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleBackToStore} className="text-muted-foreground hover:text-foreground">
+          </div> */}
+          {/* <Button variant="ghost" size="sm" onClick={handleBackToStore} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Continue shopping
-          </Button>
-        </div>
+          </Button> */}
+        {/* </div> */}
 
         <main className="container mx-auto grid gap-8 px-4 py-12 lg:grid-cols-[minmax(0,1fr)_360px]">
           <section className="space-y-8">

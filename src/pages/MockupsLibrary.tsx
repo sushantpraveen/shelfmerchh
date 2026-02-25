@@ -3282,38 +3282,34 @@ const MockupsLibrary = () => {
             <main className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header Section */}
                 <div className="mb-10">
-                    <div className="flex items-center gap-4 mb-6">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => navigate(-1)}
-                            className="rounded-full border-2 hover:border-primary transition-all hover:scale-105 shadow-sm"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                        </Button>
+                    <div className="flex items-start justify-between gap-4 mb-6">
                         <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="p-2 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg">
-                                    <Package className="h-6 w-6 text-primary" />
-                                </div>
-                                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
-                                    Mockups Library
-                                </h1>
-                            </div>
-                            <p className="text-slate-600 text-sm ml-14">
+                            <h1 className="text-4xl font-bold tracking-tight text-slate-900 mb-2">
+                                Mockups Library
+                            </h1>
+                            <p className="text-slate-600 text-sm">
                                 Your design is ready! Preview and save professional mockups for your products
                             </p>
                         </div>
+                        <Button
+                            onClick={() => {
+                                if (state.productId) {
+                                    navigate(`/designer/${state.productId}`);
+                                } else {
+                                    navigate(-1);
+                                }
+                            }}
+                            className="bg-[#1a1c0e] hover:bg-[#2a2d18] text-white px-6 py-2 rounded-md font-semibold transition-all shadow-sm hover:shadow-md h-auto"
+                        >
+                            Edit design
+                        </Button>
                     </div>
 
                     {/* Progress Bar */}
                     {totalMockups > 0 && (
                         <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200/60">
                             <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                    <Sparkles className="h-4 w-4 text-amber-500" />
-                                    <span className="text-sm font-semibold text-slate-700">Mockup Generation Progress</span>
-                                </div>
+                                <span className="text-sm font-semibold text-slate-700">Mockup Generation Progress</span>
                                 <span className="text-sm font-bold text-primary">{savedCount}/{totalMockups} saved</span>
                             </div>
                             <Progress value={saveProgress} className="h-2" />
@@ -3324,9 +3320,6 @@ const MockupsLibrary = () => {
                 {error && (
                     <Card className="mb-6 border-red-200 bg-red-50 shadow-sm">
                         <CardHeader className="flex flex-row items-center gap-3 pb-3">
-                            <div className="p-2 bg-red-100 rounded-lg">
-                                <AlertTriangle className="h-5 w-5 text-red-600" />
-                            </div>
                             <CardTitle className="text-base text-red-900">Error Loading Mockups</CardTitle>
                         </CardHeader>
                         <CardContent className="text-sm text-red-700">{error}</CardContent>
@@ -3346,23 +3339,16 @@ const MockupsLibrary = () => {
                 {!isLoading && !error && storeProduct && (
                     <div className="space-y-8">
                         {/* Design Previews Section */}
-                        <Card className="border-slate-200/60 shadow-lg overflow-hidden">
-                            <div className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/60">
-                                <CardHeader className="pb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-primary/10 rounded-lg">
-                                            <Eye className="h-5 w-5 text-primary" />
-                                        </div>
-                                        <div>
-                                            <CardTitle className="text-lg">Your Design</CardTitle>
-                                            <CardDescription className="text-xs mt-1">
-                                                The artwork that will appear on your products
-                                            </CardDescription>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                            </div>
-                            <CardContent className="pt-6">
+                        <Card className="border-slate-200/60 shadow-sm overflow-hidden mb-8">
+                            <CardHeader className="pb-4 bg-white border-b border-slate-100">
+                                <div>
+                                    <CardTitle className="text-lg font-bold text-slate-800">Your Design</CardTitle>
+                                    <CardDescription className="text-xs mt-1 text-slate-500">
+                                        The artwork that will appear on your products
+                                    </CardDescription>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-8">
                                 {uniqueDesignImages.length > 0 ? (
                                     <div className="flex flex-wrap gap-4">
                                         {uniqueDesignImages.map((el, idx) => (
@@ -3370,18 +3356,14 @@ const MockupsLibrary = () => {
                                                 key={idx}
                                                 className="group relative"
                                             >
-                                                <div className="w-40 h-40 border-2 border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-primary/50">
-                                                    <div className="w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 to-white">
+                                                <div className="w-40 h-40 border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-300">
+                                                    <div className="w-full h-full flex items-center justify-center p-4">
                                                         <img
                                                             src={el.imageUrl}
                                                             alt={`Design ${idx + 1}`}
                                                             className="max-w-full max-h-full object-contain"
                                                         />
                                                     </div>
-                                                </div>
-                                                {/* Hover Badge */}
-                                                <div className="absolute -top-2 -right-2 bg-primary text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    Design {idx + 1}
                                                 </div>
                                             </div>
                                         ))}
@@ -3398,53 +3380,48 @@ const MockupsLibrary = () => {
 
                         {/* Mockups Section */}
                         <Card className="border-slate-200/60 shadow-lg overflow-hidden">
-                            <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-b border-slate-200/60">
-                                <CardHeader className="pb-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-primary/20 rounded-lg">
-                                                <Zap className="h-5 w-5 text-primary" />
-                                            </div>
-                                            <div>
-                                                <CardTitle className="text-lg">Realistic Mockup Previews</CardTitle>
-                                                <CardDescription className="text-xs mt-1">
-                                                    AI-powered WebGL rendering • {allColorMockups.length} color variant{allColorMockups.length !== 1 ? 's' : ''} • {totalMockups} total mockup{totalMockups !== 1 ? 's' : ''}
-                                                </CardDescription>
-                                            </div>
+                            <CardHeader className="pb-4 bg-white border-b border-slate-100">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div>
+                                            <CardTitle className="text-lg">Realistic Mockup Previews</CardTitle>
+                                            <CardDescription className="text-xs mt-1">
+                                                AI-powered WebGL rendering • {allColorMockups.length} color variant{allColorMockups.length !== 1 ? 's' : ''} • {totalMockups} total mockup{totalMockups !== 1 ? 's' : ''}
+                                            </CardDescription>
                                         </div>
-                                        {allColorMockups.length > 0 && Object.keys(designImagesByView).length > 0 && (
-                                            <Button
-                                                onClick={saveAllMockupPreviews}
-                                                disabled={isSavingAll || allSaved}
-                                                size="lg"
-                                                className={cn(
-                                                    "gap-2 px-6 py-3 font-bold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105",
-                                                    allSaved
-                                                        ? "bg-emerald-500 hover:bg-emerald-600"
-                                                        : "bg-gradient-to-r from-primary to-primary/80"
-                                                )}
-                                            >
-                                                {isSavingAll ? (
-                                                    <>
-                                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                                        Saving All...
-                                                    </>
-                                                ) : allSaved ? (
-                                                    <>
-                                                        <Check className="h-4 w-4" />
-                                                        All Saved!
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Save className="h-4 w-4" />
-                                                        Save All Previews
-                                                    </>
-                                                )}
-                                            </Button>
-                                        )}
                                     </div>
-                                </CardHeader>
-                            </div>
+                                    {allColorMockups.length > 0 && Object.keys(designImagesByView).length > 0 && (
+                                        <Button
+                                            onClick={saveAllMockupPreviews}
+                                            disabled={isSavingAll || allSaved}
+                                            size="lg"
+                                            className={cn(
+                                                "gap-2 px-6 py-3 font-bold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105",
+                                                allSaved
+                                                    ? "bg-emerald-500 hover:bg-emerald-600"
+                                                    : "bg-gradient-to-r from-primary to-primary/80"
+                                            )}
+                                        >
+                                            {isSavingAll ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    Saving All...
+                                                </>
+                                            ) : allSaved ? (
+                                                <>
+                                                    <Check className="h-4 w-4" />
+                                                    All Saved!
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Save className="h-4 w-4" />
+                                                    Save All Previews
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardHeader>
 
                             <CardContent className="pt-8">
                                 {isLoadingMockups ? (
@@ -3630,38 +3607,43 @@ const MockupsLibrary = () => {
                         </Card>
 
                         {/* CTA Button */}
-                        {allColorMockups.length > 0 && Object.keys(savedMockupUrls).length > 0 && (
-                            <div className="flex justify-end pt-8 pb-12">
-                                <Button
-                                    size="lg"
-                                    className="px-10 py-6 text-lg font-bold gap-3 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-105 bg-gradient-to-r from-primary to-primary/80"
-                                    onClick={() => {
-                                        navigate('/listing-editor', {
-                                            state: {
-                                                ...state,
-                                                storeProductId,
-                                                savedMockupUrls,
-                                            },
-                                        });
-                                    }}
-                                >
-                                    Continue
-                                    <ChevronRight className="h-6 w-6" />
-                                </Button>
-                            </div>
-                        )}
+                        {
+                            allColorMockups.length > 0 && Object.keys(savedMockupUrls).length > 0 && (
+                                <div className="flex justify-end pt-8 pb-12">
+                                    <Button
+                                        size="lg"
+                                        className="px-10 py-6 text-lg font-bold gap-3 shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-105 bg-gradient-to-r from-primary to-primary/80"
+                                        onClick={() => {
+                                            navigate('/listing-editor', {
+                                                state: {
+                                                    ...state,
+                                                    storeProductId,
+                                                    savedMockupUrls,
+                                                },
+                                            });
+                                        }}
+                                    >
+                                        Continue
+                                        <ChevronRight className="h-6 w-6" />
+                                    </Button>
+                                </div>
+                            )
+                        }
                     </div>
-                )}
+                )
+                }
 
-                {!isLoading && !error && !storeProduct && (
-                    <div className="border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50/50 p-20 text-center">
-                        <Package className="h-16 w-16 mx-auto mb-4 text-slate-400" />
-                        <h3 className="text-lg font-bold text-slate-700 mb-2">No Store Product Loaded</h3>
-                        <p className="text-sm text-slate-600">Please go back to the design editor and try again.</p>
-                    </div>
-                )}
-            </main>
-        </div>
+                {
+                    !isLoading && !error && !storeProduct && (
+                        <div className="border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50/50 p-20 text-center">
+                            <Package className="h-16 w-16 mx-auto mb-4 text-slate-400" />
+                            <h3 className="text-lg font-bold text-slate-700 mb-2">No Store Product Loaded</h3>
+                            <p className="text-sm text-slate-600">Please go back to the design editor and try again.</p>
+                        </div>
+                    )
+                }
+            </main >
+        </div >
     );
 };
 
