@@ -4,7 +4,7 @@
  */
 
 const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'shelfmerch.in';
-const RESERVED_SUBDOMAINS = ['www', 'shelfmerch', 'admin', 'api'];
+const RESERVED_SUBDOMAINS = ['www', 'shelfmerch', 'admin', 'api', 'app'];
 
 /**
  * Extract tenant slug from hostname

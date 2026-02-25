@@ -51,6 +51,7 @@ export const storeProductsApi = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
@@ -77,6 +78,7 @@ export const storeProductsApi = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
@@ -102,6 +104,7 @@ export const storeProductsApi = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
@@ -123,6 +126,7 @@ export const storeProductsApi = {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
@@ -150,6 +154,7 @@ export const storeProductsApi = {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
@@ -177,6 +182,7 @@ export const storeProductsApi = {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
@@ -199,6 +205,7 @@ export const storeProductsApi = {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
@@ -225,6 +232,7 @@ export const storeProductsApi = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
       },
       credentials: 'include', // Important: include credentials to preserve cookies
     });
@@ -249,6 +257,7 @@ export const storeProductsApi = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
       },
       credentials: 'include', // Important: include credentials to preserve cookies
     });
@@ -728,6 +737,29 @@ export const adminWalletApi = {
   },
 };
 
+// Admin Shopify Orders API
+export const adminShopifyOrdersApi = {
+  list: async (params?: { page?: number; limit?: number; q?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.q) queryParams.append('q', params.q);
+    const query = queryParams.toString();
+
+    return apiRequest<{
+      data: any[];
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    }>(`/admin/shopify-orders${query ? `?${query}` : ''}`);
+  },
+
+  getById: async (orderId: string) => {
+    return apiRequest<any>(`/admin/shopify-orders/${encodeURIComponent(orderId)}`);
+  },
+};
+
 // ============================================
 // Merchant Withdrawals API
 // ============================================
@@ -1095,6 +1127,7 @@ const apiRequest = async <T = any>(
 
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
   };
 
   if (token) {
@@ -1182,7 +1215,13 @@ const apiRequest = async <T = any>(
 
   // For auth endpoints, return the full response object (includes success, token, refreshToken, user, count)
   // For other endpoints, return data.data or data.user or the whole data object
-  if (data.success !== undefined && (data.token !== undefined || data.user !== undefined || typeof (data as any).count === 'number')) {
+  if (data.success !== undefined && (
+    data.token !== undefined || 
+    data.user !== undefined || 
+    typeof (data as any).count === 'number' || 
+    typeof (data as any).total === 'number' ||
+    (data as any).pagination !== undefined
+  )) {
     return data as T;
   }
 
@@ -1536,6 +1575,7 @@ export const productApi = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
       credentials: 'include',
@@ -1611,6 +1651,7 @@ export const productApi = {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         signal: controller.signal, // Add abort signal

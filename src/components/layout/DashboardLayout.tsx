@@ -463,6 +463,16 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           <Button variant={isActiveRoute('/analytics') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
             <Link to="/analytics"><TrendingUp className="mr-2 h-4 w-4" />Analytics</Link>
           </Button>
+          <Button
+            variant={isActiveRoute('/dashboard/shopify') ? 'secondary' : 'ghost'}
+            className="w-full justify-start"
+            asChild
+          >
+            <Link to="/dashboard/shopify">
+              <ShoppingBag className="mr-2 h-4 w-4" />
+              Shopify Integration
+            </Link>
+          </Button>
           {isAdmin && (
             <Button variant={isActiveRoute('/admin') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
               <Link to="/admin"><Users className="mr-2 h-4 w-4" />Admin Panel</Link>

@@ -4,21 +4,18 @@ const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
+const { runShopifyIndexMigration } = require('./utils/migrations/fixShopifyIndexes');
+const session = require('express-session');
+const passport = require('passport');
 require('dotenv').config();
+
+// Initialize Express app
+const app = express();
+app.set('trust proxy', 1); // Trust first proxy (ngrok/nginx) - CRITICAL for secure cookies in dev/prod
 
 // Validate required environment variables
 const requiredEnvVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MONGO_URL'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-if (missingVars.length > 0) {
-  console.error('\n❌ ERROR: Missing required environment variables:');
-  missingVars.forEach(varName => {
-    console.error(`   - ${varName}`);
-  });
-  console.error('\n📝 Please create a .env file in the backend directory with these variables.');
-  console.error('💡 Run "node generate-secrets.js" to generate secure JWT secrets.\n');
-  process.exit(1);
-}
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -46,9 +43,6 @@ const reviewsRoutes = require('./routes/reviews');
 const { tenantResolver } = require('./middleware/tenantResolver');
 const storeRedirect = require('./middleware/storeRedirect');
 
-// Initialize Express app
-const app = express();
-
 const { WHITELISTED_DOMAINS } = require('./utils/security');
 
 // CORS configuration - MUST BE FIRST
@@ -72,45 +66,35 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Host', 'X-API-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Host', 'X-API-Key', 'ngrok-skip-browser-warning'],
   exposedHeaders: ['Authorization'],
   preflightContinue: false
 };
 
 // Apply CORS middleware (handles preflight OPTIONS requests automatically)
 app.use(cors(corsOptions));
-
+app.use(cookieParser(process.env.COOKIE_SECRET || process.env.JWT_SECRET)); 
 // Security middleware (after CORS)
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com"],
       imgSrc: ["'self'", "data:", "https:"],
+      frameAncestors: ["'self'", "https://admin.shopify.com", "https://*.myshopify.com"],
     },
   },
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  frameguard: false // Required for Shopify embedded apps
 }));
 
-// Razorpay webhook route - MUST be registered BEFORE express.json() to get raw body
-// The webhook handler has its own express.raw() middleware
-app.use('/api/razorpay', razorpayWebhookRoutes);
+// Root route (GET /)
+app.get('/', (req, res) => {
+  res.status(200).send('ShelfMerch Shopify Backend - Ready');
+});
 
-// Body parser middleware - Increased limit for base64 images
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Cookie parser
-app.use(cookieParser());
-
-const passport = require('passport');
-const session = require('express-session');
-
-// Trusted proxy (for accurate IP addresses and hostname behind reverse proxy)
-// Important: Must trust proxy to get correct hostname from nginx/load balancer
-app.set('trust proxy', 1);
 
 // Express Session Middleware - Required for Passport OAuth state validation
 app.use(session({
@@ -125,6 +109,44 @@ app.use(session({
   },
   proxy: true // Required for secure cookie over HTTPS behind a proxy
 }));
+
+// === PUBLIC ROUTES (Bypass Global Auth) ===
+// Webhook raw body handlers (MUST be before express.json)
+app.use('/api/razorpay', razorpayWebhookRoutes);
+app.use('/api/shopify/webhooks', express.raw({ type: 'application/json' }));
+// Body parser middleware - Increased limit for base64 images
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+app.use('/api/shopify', require('./routes/shopifyRoutes'));
+
+// Cron Job for Shopify Sync (Every 2 minutes) — gated by CRON_ENABLED
+const cron = require('node-cron');
+const { syncForShop } = require('./services/shopifySync');
+const ShopifyStore = require('./models/ShopifyStore');
+
+if (process.env.CRON_ENABLED !== 'false') {
+  cron.schedule('*/2 * * * *', async () => {
+    console.log(`[CRON] Starting Shopify Sync (mode: ${process.env.SYNC_MODE || 'orders'})...`);
+    try {
+      const stores = await ShopifyStore.find({ isActive: true });
+      for (const store of stores) {
+        try {
+          const result = await syncForShop(store.shop, store.merchantId);
+          console.log(`[SYNC] ${store.shop}: Fetched ${result.fetched}, Upserted ${result.upserted} (${result.mode})`);
+        } catch (err) {
+          console.error(`[SYNC ERROR] ${store.shop}:`, err.message);
+        }
+      }
+    } catch (error) {
+      console.error('[CRON ERROR] Failed to load stores', error);
+    }
+  });
+  console.log('[CRON] Shopify sync cron scheduled (every 2 min)');
+} else {
+  console.log('[CRON] Shopify sync cron DISABLED (CRON_ENABLED=false)');
+}
+
 
 // Passport Config
 require('./config/passport')(passport);
@@ -154,24 +176,6 @@ const limiter = rateLimit({
 
 app.use('/api/', limiter);
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  console.log(`Origin: ${req.headers.origin || 'none'}`);
-  if (req.method === 'OPTIONS') {
-    console.log('Preflight request received');
-  }
-  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-    // Don't log full body for product routes (too large with base64 images)
-    if (req.path.includes('/products')) {
-      console.log(`Body size: ${JSON.stringify(req.body).length} characters`);
-    } else {
-      console.log(`Body:`, req.body);
-    }
-  }
-  next();
-});
-
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -179,6 +183,18 @@ app.get('/health', (req, res) => {
     message: 'Server is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Debug endpoint for production diagnosis
+app.get('/api/_debug/version', (req, res) => {
+  res.status(200).json({
+    success: true,
+    env: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+    node_version: process.version,
+    // Add dummy commit for now, usually this would be injected by CI/CD
+    version: '1.0.1-shopify-fix-v3' 
   });
 });
 
@@ -215,6 +231,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/admin/wallet', adminWalletRoutes);
 app.use('/api/merchant', merchantWithdrawalsRoutes);
 app.use('/api/admin/withdrawals', adminWithdrawalsRoutes);
+app.use('/api/admin/shopify-orders', require('./routes/adminShopifyOrders'));
 
 // 404 handler
 app.use((req, res) => {
@@ -325,6 +342,9 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
+    
+    // Run one-time migrations
+    await runShopifyIndexMigration();
 
     const server = app.listen(PORT, '0.0.0.0', () => {
       const address = server.address();

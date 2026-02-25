@@ -8,12 +8,16 @@ export const IS_DEV = import.meta.env.DEV;
 export const IS_PROD = import.meta.env.PROD;
 
 // API Base URL - The backend endpoint
-// In production, use relative URL to preserve hostname for tenant resolution
-// In development, use absolute URL
-const isDev = import.meta.env.DEV;
-export const API_BASE_URL = isDev 
-  ? (import.meta.env.VITE_API_URL || 'http://localhost:5000/api')
-  : '/api';
+// In production, we favor VITE_API_BASE_URL for explicit targeting, falling back to relative /api
+export const API_BASE_URL = IS_PROD 
+  ? (import.meta.env.VITE_API_BASE_URL || '/api') 
+  : (import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
+
+// For Shopify OAuth, we MUST use the public ngrok/production URL for both start and callback.
+// If VITE_API_BASE_URL is set (e.g. to ngrok), we use that to ensure cookies are set on the correct domain.
+export const SHOPIFY_API_BASE_URL = import.meta.env.VITE_SHOPIFY_API_BASE_URL || 
+  import.meta.env.VITE_API_BASE_URL || 
+  API_BASE_URL;
 
 // Store Base URL - Where the storefronts are hosted
 // In development, this is typically localhost:8080 or similar

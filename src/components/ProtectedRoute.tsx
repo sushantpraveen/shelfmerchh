@@ -4,10 +4,15 @@ import { useAuth } from '@/contexts/AuthContext';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
+  requireMerchant?: boolean;
 }
 
-export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
-  const { isAuthenticated, isAdmin, isLoading } = useAuth();
+export const ProtectedRoute = ({
+  children,
+  requireAdmin = false,
+  requireMerchant = false
+}: ProtectedRouteProps) => {
+  const { isAuthenticated, isAdmin, isMerchant, isLoading } = useAuth();
   const location = useLocation();
 
   // Wait for auth state to finish loading before redirecting
@@ -27,6 +32,10 @@ export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRout
   }
 
   if (requireAdmin && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireMerchant && !isMerchant) {
     return <Navigate to="/dashboard" replace />;
   }
 
