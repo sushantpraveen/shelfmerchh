@@ -85,19 +85,19 @@ const ShopifyApp: React.FC = () => {
                     <CardContent className="flex flex-col gap-4">
                         <Button
                             className="w-full"
-                            onClick={() => window.open(`${window.location.origin}/auth?mode=login&returnTo=${returnUrl}`, '_top')}
+                            onClick={() => navigate(`/auth?mode=login&returnTo=${returnUrl}`)}
                         >
                             Login to ShelfMerch
                         </Button>
                         <Button
                             variant="outline"
                             className="w-full"
-                            onClick={() => window.open(`${window.location.origin}/auth?mode=signup&returnTo=${returnUrl}`, '_top')}
+                            onClick={() => navigate(`/auth?mode=signup&returnTo=${returnUrl}`)}
                         >
                             Sign up for ShelfMerch
                         </Button>
                         <p className="text-xs text-center text-muted-foreground mt-2">
-                            Note: Login will attempt to open in the main window.
+                            You'll return to Shopify after login.
                         </p>
                     </CardContent>
                 </Card>
