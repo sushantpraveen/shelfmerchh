@@ -70,7 +70,12 @@ const ShopifyApp: React.FC = () => {
         }
 
         if (!user) {
-            const returnUrl = encodeURIComponent(`${window.location.origin}/shopify/app?shop=${shop}`);
+            // Build relative returnTo preserving shop and host params
+            const host = searchParams.get('host');
+            let returnPath = `/shopify/app?shop=${encodeURIComponent(shop)}`;
+            if (host) returnPath += `&host=${encodeURIComponent(host)}`;
+            const returnUrl = encodeURIComponent(returnPath);
+
             return (
                 <Card className="w-full max-w-md">
                     <CardHeader>

@@ -28,6 +28,10 @@ export const ProtectedRoute = ({
   }
 
   if (!isAuthenticated) {
+    // Save full path (including query params) to sessionStorage for post-login redirect
+    const fullPath = `${location.pathname}${location.search}${location.hash}`;
+    sessionStorage.setItem('returnTo', fullPath);
+    console.log('[ProtectedRoute] Not authenticated, saving returnTo:', fullPath);
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
