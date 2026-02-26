@@ -2744,6 +2744,29 @@ const DesignEditor: React.FC = () => {
 
       // --- NEW MOCKUP GENERATION FLOW ---
 
+      // Helper to save state for restoration when coming back from Mockups/Listing
+      const saveStateForReturn = () => {
+        if (!catalogProductId) return;
+        try {
+          const designState = {
+            elements,
+            selectedColors,
+            selectedSizes,
+            selectedSizesByColor,
+            currentView,
+            designUrlsByPlaceholder,
+            placementsByView,
+            savedPreviewImages,
+            displacementSettings,
+            primaryColorHex,
+          };
+          sessionStorage.setItem(`designer_state_${catalogProductId}`, JSON.stringify(designState));
+          console.log('Saved design state to sessionStorage for:', catalogProductId);
+        } catch (err) {
+          console.error('Failed to save design state for return:', err);
+        }
+      };
+
       // Check if product has sample mockups
       const sampleMockups = (product.design as any)?.sampleMockups || [];
       const hasSampleMockups = sampleMockups.length > 0;
@@ -2751,8 +2774,7 @@ const DesignEditor: React.FC = () => {
 
       // Navigate to MockupsLibrary if sample mockups exist
       if (hasSampleMockups) {
-        // toast.success('Proceeding to library to select mockups.');
-
+        saveStateForReturn();
         navigate('/mockups-library', {
           state: {
             storeProductId, // Pass the draft ID
@@ -2769,6 +2791,7 @@ const DesignEditor: React.FC = () => {
         });
       } else {
         // Fallback to legacy behavior if no sample mockups
+        saveStateForReturn();
         toast.success('Design ready. Continue in Listing editor to finish publishing.');
         navigate('/listing-editor', {
           state: {
