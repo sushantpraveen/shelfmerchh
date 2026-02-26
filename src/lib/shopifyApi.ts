@@ -94,6 +94,11 @@ export const shopifyApi = {
   syncProducts: (shop: string) => 
     shopifyApi.syncOrders(shop, 'products'),
 
+  getStatus: (shop: string) =>
+    shopifyFetch<{ success: boolean; shop: string; installed: boolean; linked: boolean; authUrl?: string }>(
+      `/shopify/status?shop=${encodeURIComponent(shop)}`
+    ),
+
   linkAccount: (shop: string) =>
     api.post('/shopify/link-account', { shop })
 };

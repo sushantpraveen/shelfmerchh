@@ -9,7 +9,7 @@ const ShopifyStoreSchema = new mongoose.Schema({
   },
   accessToken: {
     type: String,
-    required: true
+    default: null
   },
   scopes: {
     type: [String],
@@ -26,6 +26,10 @@ const ShopifyStoreSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  uninstalledAt: {
+    type: Date,
+    default: null
+  },
   webhookIds: {
     type: Map,
     of: String,
@@ -41,17 +45,14 @@ const ShopifyStoreSchema = new mongoose.Schema({
   merchantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true
+    index: true,
+    default: null
   }
 }, {
   timestamps: true
 });
 
-// Compound index to prevent duplicate stores per merchant
-ShopifyStoreSchema.index({ merchantId: 1, shop: 1 }, { unique: true });
-
-// Index on shop for faster lookups (non-unique to allow multiple merchants to connect same store if needed)
-ShopifyStoreSchema.index({ shop: 1 });
+// One record per shop (unique)
+ShopifyStoreSchema.index({ shop: 1 }, { unique: true });
 
 module.exports = mongoose.model('ShopifyStore', ShopifyStoreSchema);
