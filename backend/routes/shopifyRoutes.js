@@ -47,7 +47,7 @@ const handleShopifyError = (error, res) => {
 const jwt = require('jsonwebtoken');
 
 // @route   GET /api/shopify/start
-// @desc    Step 1: Reliable top-level navigation to start OAuth (Solves 3rd party cookie blocking)
+// @desc    Step 1: Start Shopify OAuth. Token is OPTIONAL (Qikink flow: install before login).
 router.get('/start', async (req, res) => {
   try {
     const { shop, token } = req.query;
@@ -57,30 +57,21 @@ router.get('/start', async (req, res) => {
       return res.status(400).send('Invalid or missing shop parameter');
     }
 
-    if (!token) {
-      return res.status(401).send('Authentication token missing. Please start flow from dashboard.');
-    }
-
-    // Verify merchant JWT token manually as this is a top-level navigation (no Bearer header)
-    let merchantId;
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      merchantId = decoded.id || decoded._id;
-    } catch (err) {
-      return res.status(401).send('Invalid authentication token.');
+    // Token is OPTIONAL — if provided, decode and set merchant_id cookie
+    let merchantId = null;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        merchantId = decoded.id || decoded._id;
+      } catch (err) {
+        console.log('[Shopify START] Invalid token provided, proceeding without merchant context');
+      }
     }
 
     const nonce = crypto.randomBytes(32).toString('hex');
     const publicBase = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
     const redirectUri = encodeURIComponent(`${publicBase}/api/shopify/callback`);
 
-    // sushant added 
-    console.log("SHOPIFY_API_KEY =", process.env.SHOPIFY_API_KEY);
-console.log("SHOPIFY_SCOPES =", process.env.SHOPIFY_SCOPES);
-console.log("PUBLIC_BASE_URL =", process.env.PUBLIC_BASE_URL);
-    
-    // FORCE standard OAuth flow: {shop}.myshopify.com/admin/oauth/authorize
-    // Building strictly as per requirements to avoid unified admin landing issues
     const authorizeUrl = `https://${sanitizedShop}/admin/oauth/authorize?client_id=${process.env.SHOPIFY_API_KEY}&scope=${encodeURIComponent(process.env.SHOPIFY_SCOPES)}&redirect_uri=${redirectUri}&state=${nonce}&shop=${sanitizedShop}`;
 
     const cookieOptions = {
@@ -91,15 +82,16 @@ console.log("PUBLIC_BASE_URL =", process.env.PUBLIC_BASE_URL);
       signed: true
     };
 
-    // Set persistence cookies in a first-party context
+    // Always set state cookie
     res.cookie('shopify_state', nonce, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
-    res.cookie('merchant_id', merchantId.toString(), { ...cookieOptions, maxAge: 60 * 60 * 1000 });
 
-    // PROOF-LEVEL DEBUG LOG
-    console.log('[Shopify OAuth] Redirecting to:', authorizeUrl);
-    console.log('[Shopify START] SET-COOKIE', res.getHeader('Set-Cookie'));
-    
-    // Perform top-level redirect to Shopify
+    // Only set merchant cookie if we have a valid token
+    if (merchantId) {
+      res.cookie('merchant_id', merchantId.toString(), { ...cookieOptions, maxAge: 60 * 60 * 1000 });
+    }
+
+    console.log('[Shopify OAuth] Redirecting to:', authorizeUrl, '| merchantId:', merchantId || 'none');
+
     res.redirect(normalizeUrl(authorizeUrl));
   } catch (error) {
     console.error('[Shopify START ERROR]', error);
@@ -113,23 +105,19 @@ function normalizeUrl(url) {
 }
 
 // @route   GET /api/shopify/callback
-// @desc    Step 2: Handle Shopify OAuth callback
+// @desc    Step 2: Handle Shopify OAuth callback. merchantId cookie is OPTIONAL.
 router.get('/callback', async (req, res) => {
-  const { shop, code, state } = req.query;
+  const { shop, code, state, host } = req.query;
   const sanitizedShop = sanitizeShop(shop);
-  
-  // Read state and merchant from signedCookies with fallback to plain cookies
+
+  // Read state cookie (required) and merchant cookie (optional)
   const cookieState = req.signedCookies.shopify_state || req.cookies.shopify_state;
-  const merchantId = req.signedCookies.merchant_id || req.cookies.merchant_id;
+  const merchantId = req.signedCookies.merchant_id || req.cookies.merchant_id || null;
 
-  // FAIL-FAST WITH PROOF-LEVEL DEBUGGING
-  if (!state || !cookieState || state !== cookieState || !merchantId) {
-    console.log("[Shopify CALLBACK FAIL] COOKIE HEADER", req.headers.cookie);
-    console.log("[Shopify CALLBACK FAIL] SIGNED KEYS", Object.keys(req.signedCookies || {}));
-    console.log("[Shopify CALLBACK FAIL] PLAIN KEYS", Object.keys(req.cookies || {}));
-    console.log("[Shopify CALLBACK FAIL] query.state", state, "cookieState", cookieState, "merchantId", merchantId);
-
-    return res.status(403).send('Request origin could not be verified (Reason: Missing shopify_state cookie or timeout). Please try again from the dashboard.');
+  // Validate state cookie (HMAC protection). merchantId is NOT required.
+  if (!state || !cookieState || state !== cookieState) {
+    console.log('[Shopify CALLBACK FAIL] state mismatch', { state, cookieState });
+    return res.status(403).send('Request origin could not be verified. Please try again.');
   }
 
   try {
@@ -146,24 +134,36 @@ router.get('/callback', async (req, res) => {
 
     const { access_token, scope } = tokenResponse.data;
 
-    // UPSERT STORE with merchantId (Isolation)
+    // UPSERT by shop ONLY (one record per shop)
+    const updateData = {
+      accessToken: access_token,
+      scope: scope,
+      scopes: scope ? scope.split(',') : [],
+      isActive: true,
+      installedAt: new Date(),
+      uninstalledAt: null
+    };
+
+    // Only set merchantId if we have it from cookie
+    if (merchantId) {
+      updateData.merchantId = merchantId;
+    }
+
     await ShopifyStore.findOneAndUpdate(
-      { shop: sanitizedShop, merchantId },
-      { 
-        accessToken: access_token, 
-        scope: scope, 
-        scopes: scope ? scope.split(',') : [],
-        isActive: true, 
-        installedAt: new Date() 
-      },
+      { shop: sanitizedShop },
+      { $set: updateData },
       { upsert: true, new: true }
     );
 
+    console.log(`[Shopify Callback] Installed shop=${sanitizedShop}, merchantId=${merchantId || 'none'}`);
+
     res.clearCookie('shopify_state', { path: '/', signed: true });
-    
-    // Redirect to Embedded App Page (Option A)
+
+    // Redirect to Embedded App Page, preserving host if available
     const appBase = (process.env.APP_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:8080').replace(/\/$/, '');
-    res.redirect(`${appBase}/shopify/app?shop=${sanitizedShop}`);
+    let redirectUrl = `${appBase}/shopify/app?shop=${sanitizedShop}`;
+    if (host) redirectUrl += `&host=${encodeURIComponent(host)}`;
+    res.redirect(redirectUrl);
 
   } catch (error) {
     console.error(`[Shopify Callback Error] ${sanitizedShop}:`, error.response?.data || error.message);
@@ -176,40 +176,72 @@ router.get('/callback', async (req, res) => {
 router.post('/link-account', protect, async (req, res) => {
   try {
     const shop = req.body?.shop;
-    
-    // 1. Validate shop exists and is a .myshopify.com domain
+
     if (!shop || typeof shop !== 'string' || !shop.endsWith('.myshopify.com')) {
-      return res.status(400).json({ 
-        ok: false, 
-        success: false, 
-        message: 'Invalid shop domain. Must be a valid .myshopify.com domain.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid shop domain. Must be a valid .myshopify.com domain.'
       });
     }
 
     const sanitizedShop = sanitizeShop(shop);
 
-    // 2. Lookup installed store (must have accessToken)
-    // We search by shop name. 
-    const store = await ShopifyStore.findOne({ shop: sanitizedShop });
-    
-    if (!store || !store.accessToken) {
-      return res.status(400).json({ 
-        ok: false, 
-        success: false, 
-        message: 'Store not installed yet. Please complete install from Shopify.' 
+    // Find installed store: must have accessToken and be active
+    const store = await ShopifyStore.findOne({
+      shop: sanitizedShop,
+      isActive: true,
+      accessToken: { $exists: true, $ne: null }
+    });
+
+    if (!store) {
+      return res.status(400).json({
+        success: false,
+        message: 'Store not installed yet. Please install the app from Shopify first.'
       });
     }
 
-    // 3. Link the shop to the current merchant (Owner/User)
-    // In our schema, we update the existing store record's merchantId
+    // Link the shop to the logged-in merchant
     store.merchantId = req.user._id;
     await store.save();
 
     console.log(`[Shopify Link] Linked shop ${sanitizedShop} to merchant ${req.user._id}`);
-    res.json({ ok: true, success: true, shop: sanitizedShop, linked: true });
+    res.json({ success: true, shop: sanitizedShop, linked: true });
   } catch (error) {
     console.error('[Shopify Link Error]', error);
-    res.status(500).json({ ok: false, success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @route   GET /api/shopify/status
+// @desc    Check install/link status for a shop (public, no auth required)
+router.get('/status', async (req, res) => {
+  try {
+    const { shop } = req.query;
+    const sanitizedShop = sanitizeShop(shop);
+
+    if (!sanitizedShop) {
+      return res.status(400).json({ success: false, message: 'Invalid or missing shop parameter' });
+    }
+
+    const store = await ShopifyStore.findOne({ shop: sanitizedShop });
+
+    const installed = !!(store && store.isActive && store.accessToken);
+    const linked = !!(installed && store.merchantId);
+
+    // Build authUrl for OAuth start (token optional)
+    const publicBase = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    const authUrl = `${publicBase}/api/shopify/start?shop=${encodeURIComponent(sanitizedShop)}`;
+
+    res.json({
+      success: true,
+      shop: sanitizedShop,
+      installed,
+      linked,
+      authUrl: installed ? undefined : authUrl
+    });
+  } catch (error) {
+    console.error('[Shopify Status Error]', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -300,5 +332,45 @@ const handleShopifyWebhook = async (req, res) => {
 router.post('/webhooks/orders-create', handleShopifyWebhook);
 router.post('/webhooks/orders-paid', handleShopifyWebhook);
 router.post('/webhooks/orders-updated', handleShopifyWebhook);
+
+// @route   POST /api/shopify/webhooks/app-uninstalled
+// @desc    Handle app/uninstalled webhook from Shopify
+const handleAppUninstalled = async (req, res) => {
+  const hmacHeader = req.get('x-shopify-hmac-sha256');
+  const shopDomain = (req.get('x-shopify-shop-domain') || '').toLowerCase();
+  const rawBody = req.body.toString('utf8');
+
+  try {
+    const secret = process.env.SHOPIFY_WEBHOOK_SECRET || process.env.SHOPIFY_API_SECRET;
+    if (!verifyShopifyWebhook(rawBody, hmacHeader, secret)) {
+      return res.status(401).send('Invalid signature');
+    }
+
+    const sanitizedShop = sanitizeShop(shopDomain);
+    if (!sanitizedShop) {
+      console.log('[Uninstall Webhook] Invalid shop domain:', shopDomain);
+      return res.status(200).send('OK');
+    }
+
+    await ShopifyStore.findOneAndUpdate(
+      { shop: sanitizedShop },
+      {
+        $set: {
+          isActive: false,
+          accessToken: null,
+          uninstalledAt: new Date()
+        }
+      }
+    );
+
+    console.log(`[Uninstall Webhook] App uninstalled for shop: ${sanitizedShop}`);
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('[Uninstall Webhook Error]', err);
+    return res.status(500).json({ ok: false });
+  }
+};
+
+router.post('/webhooks/app-uninstalled', handleAppUninstalled);
 
 module.exports = router;
