@@ -11,8 +11,8 @@ import logo from '@/assets/logo.webp';
 import googleLogo from '@/assets/google-logo-new.png';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { RAW_API_URL } from '@/config';
-import { useEffect, useMemo } from 'react';
-import { getSafeRedirect, isEmbeddedContext } from '@/utils/authUtils';
+import { useEffect } from 'react';
+import { getSafeRedirect } from '@/utils/authUtils';
 
 type AuthStep =
   | 'IDENTIFIER'
@@ -27,12 +27,22 @@ const getStoredReturnTo = (): string | null => {
   return sessionStorage.getItem('returnTo');
 };
 
-/** Read and clear returnTo from sessionStorage */
+/** Read and clear returnTo from sessionStorage, converting absolute to relative if needed */
 const consumeReturnTo = (): string => {
-  const stored = sessionStorage.getItem('returnTo');
+  let stored = sessionStorage.getItem('returnTo');
   sessionStorage.removeItem('returnTo');
-  // Also clean up legacy key
   sessionStorage.removeItem('post_auth_redirect');
+
+  // Convert absolute URL to relative path
+  if (stored && (stored.startsWith('http://') || stored.startsWith('https://'))) {
+    try {
+      const u = new URL(stored);
+      stored = u.pathname + u.search + u.hash;
+    } catch {
+      stored = null;
+    }
+  }
+
   return getSafeRedirect(stored, '/dashboard');
 };
 
@@ -41,27 +51,40 @@ const Auth = () => {
   const location = useLocation();
   const { login, loginWithOtp, signupComplete, refreshUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [embedded, setEmbedded] = useState(false);
 
-  // Detect embedded Shopify context
-  const embedded = useMemo(() => isEmbeddedContext(), []);
-
-  // Capture returnTo on mount: from URL param or location.state
+  // Capture returnTo on mount and detect embedded context from it
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const returnToParam = params.get('returnTo');
+    let resolvedReturnTo: string | null = null;
 
-    // Priority: explicit returnTo param > location.state.from > existing stored value
     if (returnToParam) {
-      sessionStorage.setItem('returnTo', returnToParam);
-      console.log('[Auth] returnTo saved from URL param:', returnToParam);
+      // Convert absolute to relative if needed
+      let clean = returnToParam;
+      if (clean.startsWith('http://') || clean.startsWith('https://')) {
+        try { clean = new URL(clean).pathname + new URL(clean).search; } catch { }
+      }
+      resolvedReturnTo = clean;
+      sessionStorage.setItem('returnTo', clean);
+      console.log('[Auth] returnTo saved from URL param:', clean);
     } else if ((location.state as any)?.from) {
       const { pathname, search, hash } = (location.state as any).from;
       const fullPath = `${pathname || ''}${search || ''}${hash || ''}`;
       if (fullPath) {
+        resolvedReturnTo = fullPath;
         sessionStorage.setItem('returnTo', fullPath);
         console.log('[Auth] returnTo saved from location.state:', fullPath);
       }
+    } else {
+      // Check if there's already a stored value
+      resolvedReturnTo = sessionStorage.getItem('returnTo');
     }
+
+    // Detect embedded context from returnTo (since /auth itself is not under /shopify/)
+    const isEmb = !!(resolvedReturnTo && resolvedReturnTo.startsWith('/shopify/'));
+    setEmbedded(isEmb);
+    console.log('[Auth] embedded context:', isEmb, 'returnTo:', resolvedReturnTo);
   }, []); // Run once on mount
 
   // Handle OAuth Callback (Token extraction from URL)
