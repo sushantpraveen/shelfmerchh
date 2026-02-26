@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/api';
+import { getSafeRedirect } from '@/utils/authUtils';
 
 import logo from '@/assets/logo.webp';
 
@@ -66,11 +67,8 @@ const VerifyPhone: React.FC = () => {
                 await refreshUser(); // Refresh user data to update verification status
 
                 // Return to the page that triggered verification (e.g. Design Editor)
-                if (locationState.returnTo) {
-                    navigate(locationState.returnTo);
-                } else {
-                    navigate('/dashboard');
-                }
+                const shop = new URLSearchParams(location.search).get('shop');
+                navigate(getSafeRedirect(locationState.returnTo, '/dashboard', shop));
             }
         } catch (err: any) {
             toast.error(err.message || 'Invalid OTP');
@@ -173,16 +171,17 @@ const VerifyPhone: React.FC = () => {
                     </div>
                 )}
 
-                {!isMandatory && (
-                    <div className="mt-8 flex justify-center">
-                        <button
-                            onClick={() => navigate(locationState.returnTo || '/dashboard')}
-                            className="text-gray-400 text-sm hover:text-gray-600 transition-colors"
-                        >
-                            Skip for now
-                        </button>
-                    </div>
-                )}
+                <div className="mt-8 flex justify-center">
+                    <button
+                        onClick={() => {
+                            const shop = new URLSearchParams(location.search).get('shop');
+                            navigate(getSafeRedirect(locationState.returnTo, '/dashboard', shop));
+                        }}
+                        className="text-gray-400 text-sm hover:text-gray-600 transition-colors"
+                    >
+                        Skip for now
+                    </button>
+                </div>
             </div>
         </div>
     );

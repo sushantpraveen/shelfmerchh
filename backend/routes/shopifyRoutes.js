@@ -73,6 +73,11 @@ router.get('/start', async (req, res) => {
     const nonce = crypto.randomBytes(32).toString('hex');
     const publicBase = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
     const redirectUri = encodeURIComponent(`${publicBase}/api/shopify/callback`);
+
+    // sushant added 
+    console.log("SHOPIFY_API_KEY =", process.env.SHOPIFY_API_KEY);
+console.log("SHOPIFY_SCOPES =", process.env.SHOPIFY_SCOPES);
+console.log("PUBLIC_BASE_URL =", process.env.PUBLIC_BASE_URL);
     
     // FORCE standard OAuth flow: {shop}.myshopify.com/admin/oauth/authorize
     // Building strictly as per requirements to avoid unified admin landing issues

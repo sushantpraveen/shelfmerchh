@@ -11,7 +11,8 @@ import logo from '@/assets/logo.webp';
 import googleLogo from '@/assets/google-logo-new.png';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { RAW_API_URL } from '@/config';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
+import { getSafeRedirect, isEmbeddedContext } from '@/utils/authUtils';
 
 type AuthStep =
   | 'IDENTIFIER'
@@ -21,11 +22,47 @@ type AuthStep =
   | 'VERIFY_SECONDARY'
   | 'NAME';
 
+/** Read returnTo from sessionStorage without clearing it */
+const getStoredReturnTo = (): string | null => {
+  return sessionStorage.getItem('returnTo');
+};
+
+/** Read and clear returnTo from sessionStorage */
+const consumeReturnTo = (): string => {
+  const stored = sessionStorage.getItem('returnTo');
+  sessionStorage.removeItem('returnTo');
+  // Also clean up legacy key
+  sessionStorage.removeItem('post_auth_redirect');
+  return getSafeRedirect(stored, '/dashboard');
+};
+
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, loginWithOtp, signupComplete, refreshUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Detect embedded Shopify context
+  const embedded = useMemo(() => isEmbeddedContext(), []);
+
+  // Capture returnTo on mount: from URL param or location.state
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnToParam = params.get('returnTo');
+
+    // Priority: explicit returnTo param > location.state.from > existing stored value
+    if (returnToParam) {
+      sessionStorage.setItem('returnTo', returnToParam);
+      console.log('[Auth] returnTo saved from URL param:', returnToParam);
+    } else if ((location.state as any)?.from) {
+      const { pathname, search, hash } = (location.state as any).from;
+      const fullPath = `${pathname || ''}${search || ''}${hash || ''}`;
+      if (fullPath) {
+        sessionStorage.setItem('returnTo', fullPath);
+        console.log('[Auth] returnTo saved from location.state:', fullPath);
+      }
+    }
+  }, []); // Run once on mount
 
   // Handle OAuth Callback (Token extraction from URL)
   useEffect(() => {
@@ -48,10 +85,9 @@ const Auth = () => {
           await refreshUser(); // Load user profile
 
           toast.success('Signed in with Google successfully!');
-          const sessionFrom = sessionStorage.getItem('post_auth_redirect');
-          const from = sessionFrom || location.state?.from?.pathname || '/dashboard';
-          if (sessionFrom) sessionStorage.removeItem('post_auth_redirect');
-          navigate(from);
+          const target = consumeReturnTo();
+          console.log('[Auth] Google OAuth redirect to:', target);
+          navigate(target);
         } catch (err) {
           console.error('OAuth token processing error:', err);
           toast.error('Failed to complete sign-in. Please try again.');
@@ -163,10 +199,9 @@ const Auth = () => {
       try {
         await login(identifier, password);
         toast.success('Welcome back!');
-        const sessionFrom = sessionStorage.getItem('post_auth_redirect');
-        const from = sessionFrom || location.state?.from?.pathname || '/dashboard';
-        if (sessionFrom) sessionStorage.removeItem('post_auth_redirect');
-        navigate(from);
+        const target = consumeReturnTo();
+        console.log('[Auth] Password login redirect to:', target);
+        navigate(target);
       } catch (err: any) {
         toast.error(err.message || 'Invalid password');
       } finally { setIsLoading(false); }
@@ -191,10 +226,9 @@ const Auth = () => {
 
         if (exists) {
           toast.success('Welcome back!');
-          const sessionFrom = sessionStorage.getItem('post_auth_redirect');
-          const from = sessionFrom || location.state?.from?.pathname || '/dashboard';
-          if (sessionFrom) sessionStorage.removeItem('post_auth_redirect');
-          navigate(from);
+          const target = consumeReturnTo();
+          console.log('[Auth] OTP login redirect to:', target);
+          navigate(target);
         } else {
           // New user - move to NAME step to complete profile
           setStep('NAME');
@@ -271,10 +305,9 @@ const Auth = () => {
     try {
       await signupComplete(name);
       toast.success('Account successfully created');
-      const sessionFrom = sessionStorage.getItem('post_auth_redirect');
-      const from = sessionFrom || location.state?.from?.pathname || '/dashboard';
-      if (sessionFrom) sessionStorage.removeItem('post_auth_redirect');
-      navigate(from);
+      const target = consumeReturnTo();
+      console.log('[Auth] Signup redirect to:', target);
+      navigate(target);
     } catch (err: any) {
       toast.error(err.message || 'Error creating account');
     } finally { setIsLoading(false); }
@@ -353,33 +386,34 @@ const Auth = () => {
                     {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Continue'}
                   </Button>
 
-                  <div className="relative my-4">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-gray-100"></span>
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-gray-400 font-medium">Or continue with</span>
-                    </div>
-                  </div>
+                  {/* Google sign-in: hidden in embedded Shopify context */}
+                  {!embedded && (
+                    <>
+                      <div className="relative my-4">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t border-gray-100"></span>
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-white px-2 text-gray-400 font-medium">Or continue with</span>
+                        </div>
+                      </div>
 
-                  <Button
-                    variant="outline"
-                    className="w-full h-12 border-gray-200 rounded-xl hover:bg-gray-50 flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
-                    onClick={() => {
-                      // Save redirect path for Google OAuth callback
-                      const from = location.state?.from?.pathname;
-                      if (from) sessionStorage.setItem('post_auth_redirect', from);
-
-                      // Construct the Google OAuth initiation URL
-                      const googleAuthUrl = `${RAW_API_URL}/api/auth/google`;
-                      console.log('📡 Redirecting to Google Auth:', googleAuthUrl);
-                      window.location.href = googleAuthUrl;
-                    }}
-                    disabled={isLoading}
-                  >
-                    <img src={googleLogo} alt="Google" className="h-5 w-5" />
-                    <span className="font-bold text-gray-700">Sign in with Google</span>
-                  </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full h-12 border-gray-200 rounded-xl hover:bg-gray-50 flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
+                        onClick={() => {
+                          // returnTo is already saved in sessionStorage on mount
+                          const googleAuthUrl = `${RAW_API_URL}/api/auth/google`;
+                          console.log('📡 Redirecting to Google Auth:', googleAuthUrl);
+                          window.location.href = googleAuthUrl;
+                        }}
+                        disabled={isLoading}
+                      >
+                        <img src={googleLogo} alt="Google" className="h-5 w-5" />
+                        <span className="font-bold text-gray-700">Sign in with Google</span>
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
 

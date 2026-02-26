@@ -17,6 +17,15 @@ const { getClientUrl } = require('../utils/security');
 // @desc    Auth with Google
 // @access  Public
 router.get('/google', (req, res, next) => {
+  // Guard: block Google OAuth in embedded Shopify context
+  const referer = req.headers.referer || '';
+  if (req.query.embedded === '1' || referer.includes('/shopify/')) {
+    return res.status(403).json({
+      success: false,
+      message: 'Google login is disabled for embedded app context.'
+    });
+  }
+
   const clientUrl = getClientUrl(req);
   console.log(`📡 Initiating Google OAuth | Client: ${clientUrl}`);
 

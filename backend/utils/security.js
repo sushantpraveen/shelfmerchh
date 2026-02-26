@@ -7,6 +7,7 @@ const WHITELISTED_DOMAINS = [
   'localhost:8085',
   'shelfmerch.com',
   'www.shelfmerch.com',
+  'app.shelfmerch.com',
   'shelfmerch.in',
   'www.shelfmerch.in'
 ];
