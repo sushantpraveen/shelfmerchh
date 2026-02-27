@@ -200,7 +200,7 @@ const StoreProfilePage: React.FC = () => {
                         <CardContent className="p-6">
                             <form onSubmit={handleSaveProfile} className="space-y-6">
                                 <div className="space-y-4">
-                                    <div className="space-y-2">
+                                    {/* <div className="space-y-2">
                                         <Label htmlFor="name">Full Name</Label>
                                         <div className="relative">
                                             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -209,10 +209,10 @@ const StoreProfilePage: React.FC = () => {
                                                 value={name}
                                                 onChange={(e) => setName(e.target.value)}
                                                 className="pl-10"
-                                                required
+                                                placeholder="Enter your name (optional)"
                                             />
                                         </div>
-                                    </div>
+                                    </div> */}
 
                                     <div className="space-y-2">
                                         <Label htmlFor="email">Email Address</Label>
@@ -226,14 +226,14 @@ const StoreProfilePage: React.FC = () => {
                                                 className={`pl-10 ${(customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId) ? 'bg-muted/50' : ''}`}
                                                 placeholder="Enter your email"
                                             />
-                                            {(customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId) ? (
+                                            {(customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId || customer.signupMethod === 'phone') ? (
                                                 <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-600" />
                                             ) : (
                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                                     <span className="group relative">
                                                         <Info className="h-4 w-4 text-amber-500 cursor-help" />
                                                         <span className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
-                                                            Please verify to proceed with checkout.
+                                                            Email verification is optional for you.
                                                         </span>
                                                     </span>
                                                     {verificationStep === 'IDLE' && email && (
@@ -306,7 +306,7 @@ const StoreProfilePage: React.FC = () => {
                                                     <span className="group relative">
                                                         <Info className="h-4 w-4 text-amber-500 cursor-help" />
                                                         <span className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
-                                                            Please verify to proceed with checkout.
+                                                            {customer.signupMethod === 'email' ? "Please verify to proceed with checkout." : "Phone verification recommended."}
                                                         </span>
                                                     </span>
                                                     {verificationStep === 'IDLE' && phone && (

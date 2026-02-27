@@ -236,7 +236,7 @@ const MerchantWallet = () => {
                                 <Button
                                     size="sm"
                                     onClick={() => setIsWithdrawalDialogOpen(true)}
-                                    disabled={(walletSummary?.availableForWithdrawalPaise || 0) < 10000}
+                                    disabled={(walletSummary?.availableForWithdrawalPaise || 0) < 50000}
                                     className="w-full sm:w-auto shrink-0"
                                 >
                                     Withdraw
@@ -300,7 +300,7 @@ const MerchantWallet = () => {
                                 </p>
                                 <Button
                                     onClick={() => setIsWithdrawalDialogOpen(true)}
-                                    disabled={(walletSummary?.availableForWithdrawalPaise || 0) < 10000}
+                                    disabled={(walletSummary?.availableForWithdrawalPaise || 0) < 50000}
                                 >
                                     Request Withdrawal
                                 </Button>

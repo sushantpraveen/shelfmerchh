@@ -65,8 +65,8 @@ const WalletTopUp = () => {
             return;
         }
 
-        if (numAmount < 1) {
-            toast.error('Minimum top-up amount is ₹1');
+        if (numAmount < 500) {
+            toast.error('Minimum top-up amount is ₹500');
             return;
         }
 
@@ -180,7 +180,7 @@ const WalletTopUp = () => {
         razorpay.open();
     };
 
-    const quickAmounts = [100, 500, 1000, 5000];
+    const quickAmounts = [500, 1000, 2000, 5000];
 
     return (
         <div className="min-h-screen bg-background">
@@ -351,7 +351,7 @@ const WalletTopUp = () => {
                                             <Input
                                                 id="amount"
                                                 type="number"
-                                                min="1"
+                                                min="500"
                                                 max="100000"
                                                 step="1"
                                                 placeholder="0.00"
@@ -363,7 +363,7 @@ const WalletTopUp = () => {
                                             />
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Min: ₹1 | Max: ₹1,00,000
+                                            Min: ₹500 | Max: ₹1,00,000
                                         </p>
                                     </div>
 
@@ -371,7 +371,7 @@ const WalletTopUp = () => {
                                         <Button
                                             type="submit"
                                             className="w-full h-11 text-lg"
-                                            disabled={isProcessing || !amount || parseFloat(amount) < 1}
+                                            disabled={isProcessing || !amount || parseFloat(amount) < 500}
                                         >
                                             {isProcessing ? (
                                                 <>Processing Payment...</>

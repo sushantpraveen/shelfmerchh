@@ -36,6 +36,7 @@ const sendCustomerTokenResponse = (customer, statusCode, res) => {
             phoneNumber: customer.phoneNumber,
             isEmailVerified: customer.isEmailVerified,
             isPhoneVerified: customer.isPhoneVerified,
+            signupMethod: customer.signupMethod,
         },
     });
 };
@@ -84,6 +85,7 @@ router.post('/otp/send', async (req, res) => {
                 merchantId: store.merchant,
                 email: otpType === 'email' ? identifier : undefined,
                 phoneNumber: otpType === 'phone' ? identifier : undefined,
+                signupMethod: otpType,
                 name: otpType === 'email' ? identifier.split('@')[0] : `Customer ${identifier.slice(-4)}`,
             });
         }
@@ -174,10 +176,12 @@ router.post('/otp/verify', async (req, res) => {
             customer.isEmailVerified = true;
             customer.emailVerificationToken = undefined;
             customer.emailVerificationTokenExpiry = undefined;
+            if (!customer.signupMethod) customer.signupMethod = 'email';
         } else {
             customer.isPhoneVerified = true;
             customer.phoneVerificationToken = undefined;
             customer.phoneVerificationTokenExpiry = undefined;
+            if (!customer.signupMethod) customer.signupMethod = 'phone';
         }
 
         customer.lastSeenAt = new Date();
@@ -324,7 +328,7 @@ router.get('/me', verifyStoreToken, async (req, res) => {
 router.put('/me', verifyStoreToken, async (req, res) => {
     try {
         const customerId = req.customer.customer.id;
-        const { name, marketingOptIn, phoneNumber } = req.body || {};
+        const { name, marketingOptIn, phoneNumber, email } = req.body || {};
 
         const updates = {};
         if (typeof name === 'string' && name.trim().length > 0) {

@@ -13,14 +13,14 @@ import googleLogo from '@/assets/google-logo-new.png';
 import { API_BASE_URL } from '@/config';
 import StoreLayout from '@/components/storefront/StoreLayout';
 
-type AuthStep = 'IDENTIFIER' | 'VERIFY' | 'NAME';
+type AuthStep = 'IDENTIFIER' | 'VERIFY';
 
 const StoreAuthPage = () => {
     const params = useParams<{ subdomain: string }>();
     const location = useLocation();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { sendOtp, verifyOtp, signupComplete, isAuthenticated, customer } = useStoreAuth();
+    const { sendOtp, verifyOtp, isAuthenticated, customer } = useStoreAuth();
 
     const subdomain = getTenantSlugFromLocation(location, params) || params.subdomain;
 
@@ -32,9 +32,9 @@ const StoreAuthPage = () => {
     // Form states
     const [identifier, setIdentifier] = useState('');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
-    const [name, setName] = useState('');
     const [entryType, setEntryType] = useState<'email' | 'phone' | null>(null);
     const [exists, setExists] = useState(false);
+    const [resendTimer, setResendTimer] = useState(0);
 
     const redirectPath = searchParams.get('redirect') || '';
 
@@ -74,20 +74,27 @@ const StoreAuthPage = () => {
 
     useEffect(() => {
         if (isAuthenticated && store) {
-            // Logic to determine if profile is complete
-            // 1. Name should exist
-            // 2. Name should NOT be a placeholder (starts with "Customer " or is just the email prefix)
-            const isPlaceholderName = customer?.name?.startsWith('Customer ') ||
-                (customer?.email && customer.name === customer.email.split('@')[0]);
-
-            if (customer?.name && !isPlaceholderName) {
-                const redirectUrl = buildStorePath('/', store.subdomain);
-                navigate(redirectUrl, { state: location.state });
-            } else if (step !== 'NAME') {
-                setStep('NAME');
-            }
+            const redirectUrl = buildStorePath('/', store.subdomain);
+            navigate(redirectUrl, { state: location.state });
         }
-    }, [isAuthenticated, store, navigate, redirectPath, location.state, customer, step]);
+    }, [isAuthenticated, store, navigate, location.state]);
+
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (resendTimer > 0) {
+            interval = setInterval(() => {
+                setResendTimer((prev) => prev - 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [resendTimer]);
+
+    // Reset timer on identifier change or step change to identifier
+    useEffect(() => {
+        if (step === 'IDENTIFIER') {
+            setResendTimer(0);
+        }
+    }, [identifier, step]);
 
     const validatePhone = (p: string) => /^\d{10}$/.test(p);
     const validateEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -129,7 +136,7 @@ const StoreAuthPage = () => {
                 setEntryType(type);
                 setExists(res.exists);
                 setStep('VERIFY');
-                toast.success(res.message);
+                toast.success(res.message || 'OTP sent successfully');
             } else {
                 toast.error(res.message || 'Failed to send OTP');
             }
@@ -155,8 +162,10 @@ const StoreAuthPage = () => {
                 if (exists) {
                     toast.success('Welcome back!');
                 } else {
-                    setStep('NAME');
+                    toast.success('Account created!');
                 }
+                const redirectUrl = buildStorePath('/', subdomain);
+                navigate(redirectUrl, { state: location.state });
             }
         } catch (err) {
             toast.error('Verification failed');
@@ -165,27 +174,6 @@ const StoreAuthPage = () => {
         }
     };
 
-    const handleNameSubmit = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-        if (!name.trim() || !subdomain) {
-            toast.error('Please enter your name');
-            return;
-        }
-
-        setIsLoadingAuth(true);
-        try {
-            const success = await signupComplete(subdomain, name.trim());
-            if (success) {
-                toast.success('Account created successfully');
-                const redirectUrl = buildStorePath('/', subdomain);
-                navigate(redirectUrl, { state: location.state });
-            }
-        } catch (err) {
-            toast.error('Failed to complete setup');
-        } finally {
-            setIsLoadingAuth(false);
-        }
-    };
 
     const handleGoogleSignIn = () => {
         if (!subdomain) return;
@@ -215,13 +203,13 @@ const StoreAuthPage = () => {
                         </Link>
                         <p className="text-muted-foreground">
                             {step === 'IDENTIFIER' ? (redirectPath === 'checkout' ? 'Sign in to continue shopping' : 'Sign in to your account') :
-                                step === 'VERIFY' ? `Enter the code sent to ${identifier}` : 'Complete your profile'}
+                                `Enter the code sent to ${identifier}`}
                         </p>
                     </div>
 
                     <div className="bg-card rounded-3xl shadow-2xl p-8 border border-gray-100">
                         <h2 className="text-2xl font-bold mb-8 text-gray-900 tracking-tight">
-                            {step === 'IDENTIFIER' ? 'Sign-In or Create' : step === 'VERIFY' ? 'Verify Code' : 'Welcome!'}
+                            {step === 'IDENTIFIER' ? 'Sign-In or Create' : 'Verify Code'}
                         </h2>
 
                         <div className="space-y-6">
@@ -302,39 +290,28 @@ const StoreAuthPage = () => {
                                     >
                                         {isLoadingAuth ? <Loader2 className="animate-spin h-5 w-5" /> : 'Verify'}
                                     </Button>
-                                    <div className="text-center">
-                                        <button
-                                            type="button"
-                                            onClick={handleIdentifierSubmit}
-                                            className="text-sm font-medium text-green-600 hover:underline"
-                                            disabled={isLoadingAuth}
-                                        >
-                                            Resend Code
-                                        </button>
+                                    <div className="text-center pt-2">
+                                        {resendTimer > 0 ? (
+                                            <p className="text-sm font-medium text-muted-foreground">
+                                                Resend OTP in <span className="text-green-600 font-bold">{resendTimer}s</span>
+                                            </p>
+                                        ) : (
+                                            <p className="text-sm font-medium text-muted-foreground">
+                                                Didn't receive the code?{' '}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        handleIdentifierSubmit();
+                                                        setResendTimer(30);
+                                                    }}
+                                                    className="text-green-600 hover:underline font-bold transition-colors"
+                                                    disabled={isLoadingAuth}
+                                                >
+                                                    Resend OTP
+                                                </button>
+                                            </p>
+                                        )}
                                     </div>
-                                </form>
-                            )}
-
-                            {step === 'NAME' && (
-                                <form onSubmit={handleNameSubmit} className="space-y-6">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="name" className="text-sm font-semibold text-gray-600 ml-1">Your Name</Label>
-                                        <Input
-                                            id="name"
-                                            value={name}
-                                            onChange={(e) => setName(e.target.value)}
-                                            className="h-12 rounded-xl border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                                            placeholder="Enter your full name"
-                                            required
-                                        />
-                                    </div>
-                                    <Button
-                                        type="submit"
-                                        className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg shadow-green-600/20 transition-all"
-                                        disabled={isLoadingAuth}
-                                    >
-                                        {isLoadingAuth ? <Loader2 className="animate-spin h-5 w-5" /> : 'Complete Setup'}
-                                    </Button>
                                 </form>
                             )}
                         </div>

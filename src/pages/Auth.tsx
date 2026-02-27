@@ -131,6 +131,7 @@ const Auth = () => {
   const [flow, setFlow] = useState<'login' | 'signup'>('login');
   const [entryType, setEntryType] = useState<'email' | 'phone' | null>(null);
   const [exists, setExists] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
 
   // Field States
   const [identifier, setIdentifier] = useState(''); // Primary
@@ -138,7 +139,23 @@ const Auth = () => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']); // Multi-use OTP
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  /* serverOtp removed */
+  // Countdown timer for Resend OTP
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
+
+  // Reset timer on identifier or step change
+  useEffect(() => {
+    if (step === 'IDENTIFIER' || step === 'SECONDARY_ID') {
+      setResendTimer(0);
+    }
+  }, [identifier, secondaryIdentifier, step]);
 
   // Validation
   const validatePhone = (p: string) => /^\d{10}$/.test(p);
@@ -499,6 +516,33 @@ const Auth = () => {
                   >
                     {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Verify'}
                   </Button>
+
+                  <div className="text-center pt-2">
+                    {resendTimer > 0 ? (
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Resend OTP in <span className="text-[#39b38e] font-bold">{resendTimer}s</span>
+                      </p>
+                    ) : (
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Didn't receive the code?{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (step === 'VERIFY_PRIMARY') {
+                              handleIdentifierSubmit();
+                            } else {
+                              handleSecondaryIdentifierSubmit();
+                            }
+                            setResendTimer(30);
+                          }}
+                          className="text-[#39b38e] hover:underline font-bold transition-colors"
+                          disabled={isLoading}
+                        >
+                          Resend OTP
+                        </button>
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -121,8 +121,8 @@ const StoreCheckoutPage: React.FC = () => {
       if (defaultAddr && (!shippingInfo.fullName || shippingInfo.fullName === '')) {
         setShippingInfo({
           fullName: defaultAddr.fullName || '',
-          email: customer.email || '',
-          phone: defaultAddr.phone || customer.phoneNumber || '',
+          email: customer.email || shippingInfo.email || '',
+          phone: defaultAddr.phone || customer.phoneNumber || shippingInfo.phone || '',
           address1: defaultAddr.address1 || '',
           address2: defaultAddr.address2 || '',
           city: defaultAddr.city || '',
@@ -130,6 +130,16 @@ const StoreCheckoutPage: React.FC = () => {
           zipCode: defaultAddr.zipCode || '',
           country: defaultAddr.country || 'India',
         });
+      }
+    } else if (customer) {
+      // Manual autofill if no saved addresses
+      if (!shippingInfo.email && customer.email) {
+        setShippingInfo(prev => ({ ...prev, email: customer.email }));
+      }
+      if (!shippingInfo.phone && customer.signupMethod === 'phone' && customer.phoneNumber) {
+        setShippingInfo(prev => ({ ...prev, phone: customer.phoneNumber }));
+      } else if (!shippingInfo.phone && customer.signupMethod === 'email' && customer.isPhoneVerified && customer.phoneNumber) {
+        setShippingInfo(prev => ({ ...prev, phone: customer.phoneNumber }));
       }
     }
   }, [customer, isAuthenticated]);
@@ -140,14 +150,7 @@ const StoreCheckoutPage: React.FC = () => {
   const tax = subtotal * 0.08;
   const total = subtotal + shipping + tax;
 
-  // Initialize default shipping when cart loads
-  useEffect(() => {
-    if (cart.length > 0 && !shippingInfo.zipCode) {
-      setShipping(150); // Default ₹150 for India
-    } else if (cart.length === 0) {
-      setShipping(0);
-    }
-  }, [cart.length]);
+  // Remove default shipping effect that sets it to ₹150
 
   // Check if Delhivery service is configured
   const isShippingServiceConfigured = !!import.meta.env.VITE_DELHIVERY_TOKEN;
@@ -158,7 +161,7 @@ const StoreCheckoutPage: React.FC = () => {
       const zipCode = shippingInfo.zipCode?.trim() || '';
 
       if (!zipCode || !/^\d{6}$/.test(zipCode)) {
-        setShipping(cart.length > 0 ? 150 : 0);
+        setShipping(0);
         setEstimatedDeliveryDays(undefined);
         setShippingLoading(false);
         return;
@@ -193,9 +196,9 @@ const StoreCheckoutPage: React.FC = () => {
         }
       } catch (error) {
         console.error('Error calculating shipping:', error);
-        setShipping(cart.length > 0 ? 150 : 0);
+        setShipping(0);
         setEstimatedDeliveryDays(undefined);
-        toast.error('Could not calculate shipping. Using default rate.');
+        toast.error('Could not calculate shipping. Enter valid pin code.');
       } finally {
         setShippingLoading(false);
       }
@@ -374,28 +377,35 @@ const StoreCheckoutPage: React.FC = () => {
       return;
     }
 
-    // MANDATORY: Check for verification before first checkout
+    // MANDATORY: Check for verification before checkout
+    // Phone verification is required for Email Signups
     const emailVerified = customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId;
     const phoneVerified = customer.isPhoneVerified || (customer as any).phoneVerified;
 
-    if (customer && (!emailVerified || !phoneVerified)) {
-      let message = "";
-      if (!emailVerified && !phoneVerified) {
-        message = "Please verify your email and phone number before placing your order.";
-      } else if (!emailVerified) {
-        message = "Please verify your email before placing your order.";
-      } else {
-        message = "Please verify your phone number before placing your order.";
+    if (customer) {
+      if (customer.signupMethod === 'email' && !phoneVerified) {
+        toast.error("Phone number verification is required to proceed with checkout.", {
+          description: "Please verify your phone number in your Profile.",
+          action: {
+            label: "Go to Profile",
+            onClick: () => navigate(buildStorePath('/profile', subdomain || ''))
+          }
+        });
+        return;
       }
 
-      toast.error(message, {
-        description: "You can complete this in your Profile section.",
-        action: {
-          label: "Go to Profile",
-          onClick: () => navigate(buildStorePath('/profile', subdomain || ''))
-        }
-      });
-      return;
+      // Email verification only required for Email signup (which is already verified by OTP during signup)
+      // but if they changed it or something, we might check. 
+      // User says: "If user created an account using phone number then no need to verify email at checkout."
+      if (customer.signupMethod === 'email' && !emailVerified) {
+        toast.error("Email verification is required to proceed with checkout.", {
+          action: {
+            label: "Go to Profile",
+            onClick: () => navigate(buildStorePath('/profile', subdomain || ''))
+          }
+        });
+        return;
+      }
     }
 
     const ok = await loadRazorpayScript();
@@ -581,13 +591,13 @@ const StoreCheckoutPage: React.FC = () => {
     <StoreLayout store={store}>
       <div className="container mx-auto px-4">
         {/* <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4"> */}
-          {/* <div>
+        {/* <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Secure Checkout</p>
             <h1 className="text-3xl font-bold" style={{ fontFamily: theme.fonts.heading }}>
               {store.storeName}
             </h1>
           </div> */}
-          {/* <Button variant="ghost" size="sm" onClick={handleBackToStore} className="text-muted-foreground hover:text-foreground">
+        {/* <Button variant="ghost" size="sm" onClick={handleBackToStore} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Continue shopping
           </Button> */}
@@ -606,22 +616,20 @@ const StoreCheckoutPage: React.FC = () => {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Verification Message */}
-                {customer && (!(customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId) || !(customer.isPhoneVerified || (customer as any).phoneVerified)) && (
-                  <div className="sm:col-span-2 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 mb-2">
-                    <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-bold text-amber-900">Verification Required</p>
-                      <p className="text-xs text-amber-700">
-                        {!(customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId) && !(customer.isPhoneVerified || (customer as any).phoneVerified)
-                          ? "Please verify your email and phone number to proceed with checkout."
-                          : !(customer.isEmailVerified || (customer as any).emailVerified || !!customer.googleId)
-                            ? "Please verify your email to proceed with checkout."
-                            : "Please verify your phone number to proceed with checkout."}
-                        <Link to={buildStorePath('/profile', subdomain || '')} className="ml-1 font-bold underline">Go to Profile</Link>
-                      </p>
+                {customer && (
+                  (customer.signupMethod === 'email' && !customer.isPhoneVerified)
+                ) && (
+                    <div className="sm:col-span-2 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 mb-2">
+                      <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-amber-900">Verification Required</p>
+                        <p className="text-xs text-amber-700">
+                          Phone number verification is required to proceed with checkout.
+                          <Link to={buildStorePath('/profile', subdomain || '')} className="ml-1 font-bold underline">Go to Profile</Link>
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Saved Address Selection */}
                 {customer && customer.addresses && customer.addresses.length > 0 && (
@@ -869,7 +877,7 @@ const StoreCheckoutPage: React.FC = () => {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button size="lg" onClick={handleContinueToPayment} disabled={processing}>
+                <Button size="lg" onClick={handleContinueToPayment} disabled={processing || shippingLoading}>
                   {processing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing payment
@@ -913,14 +921,11 @@ const StoreCheckoutPage: React.FC = () => {
                   <span>Subtotal</span>
                   <span>₹{subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-muted-foreground">
+                <div className="flex justify-between text-muted-foreground mt-2">
                   <span>
                     Shipping
-                    {!shippingInfo.zipCode && (
+                    {(!shippingInfo.zipCode || !/^\d{6}$/.test(shippingInfo.zipCode.trim())) && !shippingLoading && (
                       <span className="text-xs ml-1 text-muted-foreground">(Enter pin code)</span>
-                    )}
-                    {shippingInfo.zipCode && !/^\d{6}$/.test(shippingInfo.zipCode.trim()) && (
-                      <span className="text-xs ml-1 text-amber-600">(Enter valid 6-digit pin code)</span>
                     )}
                   </span>
                   <span>
@@ -930,7 +935,11 @@ const StoreCheckoutPage: React.FC = () => {
                         <span className="text-xs">Calculating...</span>
                       </span>
                     ) : (
-                      `₹${shipping.toFixed(2)}`
+                      (shippingInfo.zipCode && /^\d{6}$/.test(shippingInfo.zipCode.trim())) ? (
+                        `₹${shipping.toFixed(2)}`
+                      ) : (
+                        null
+                      )
                     )}
                   </span>
                 </div>

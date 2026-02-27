@@ -30,6 +30,7 @@ export interface StoreCustomer {
         orderUpdates: boolean;
         marketingEmails: boolean;
     };
+    signupMethod?: 'email' | 'phone';
 }
 
 interface StoreAuthContextType {

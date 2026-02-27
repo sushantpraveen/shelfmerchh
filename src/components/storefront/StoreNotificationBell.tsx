@@ -13,8 +13,12 @@ const StoreNotificationBell: React.FC<StoreNotificationBellProps> = ({ subdomain
     const { customer } = useStoreAuth();
     const navigate = useNavigate();
 
-    // Don't show bell if customer doesn't exist or both verifications are complete
-    if (!customer || (customer.isEmailVerified && customer.isPhoneVerified)) {
+    // For email-based signup, phone verification is required (for checkout)
+    // For phone-based signup, email verification is NOT required
+    // Default to 'email' logic if signupMethod is missing for legacy users
+    const showBell = (customer.signupMethod === 'email' || !customer.signupMethod) && !customer.isPhoneVerified;
+
+    if (!customer || !showBell) {
         return null;
     }
 
@@ -47,7 +51,7 @@ const StoreNotificationBell: React.FC<StoreNotificationBellProps> = ({ subdomain
                         Action Required
                     </span>
                     <p className="text-muted-foreground leading-tight">
-                        Complete your {needsEmail && needsPhone ? 'email & phone' : (needsEmail ? 'email' : 'phone')} verification to enable checkout.
+                        Complete your phone verification to enable checkout.
                     </p>
                     {tooltipSide === 'top' ? (
                         <div className="absolute top-full right-4 -mt-1.5 w-3 h-3 bg-popover border-r border-b border-border transform rotate-45"></div>
