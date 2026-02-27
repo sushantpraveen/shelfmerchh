@@ -250,7 +250,6 @@ const EnhancedStoreHeader = ({
                 >
                   <button className="flex items-center gap-1 cursor-pointer hover:text-primary transition-colors py-2">
                     <User className="h-5 w-5" />
-                    <span className="text-sm font-medium hidden md:inline">{customer?.name}</span>
                     <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
                   </button>
 
@@ -374,15 +373,7 @@ const EnhancedStoreHeader = ({
                         className="w-10 h-10 rounded-full flex items-center justify-center text-primary-foreground font-bold shadow-lg ring-2 ring-background ring-offset-2 ring-offset-border"
                         style={{ backgroundColor: primaryColor || '#16a34a' }}
                       >
-                        {customer?.name?.charAt(0).toUpperCase() || 'C'}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground truncate max-w-[150px]">
-                          {customer?.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate max-w-[150px]">
-                          {customer?.email}
-                        </p>
+                        <User className="h-5 w-5" />
                       </div>
                     </div>
                     <Link

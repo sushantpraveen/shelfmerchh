@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -638,14 +638,14 @@ const ListingEditor = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          {/* <div className="flex items-center gap-3">
             <Button variant="outline" onClick={handleSaveDraft} disabled={isSavingDraft || isPublishing}>
               {isSavingDraft ? 'Saving...' : 'Save as draft'}
             </Button>
             <Button onClick={handlePublish} disabled={isPublishing || isSavingDraft}>
               {isPublishing ? 'Publishing…' : 'Publish'}
             </Button>
-          </div>
+          </div> */}
         </div>
       </header>
 
@@ -1005,11 +1005,28 @@ const ListingEditor = () => {
             </div>
           </div> */}
 
-        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" onClick={handleSaveDraft}>
-            Save as draft
-          </Button>
-          <Button onClick={handlePublish}>Publish</Button>
+        <div className="flex flex-col gap-3 pt-2">
+          {pricingSummary && pricingSummary.minProfit < 0 && (
+            <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm p-3 rounded-lg flex items-center gap-2 mb-1">
+              <X className="w-4 h-4 flex-shrink-0" />
+              <p>Profit cannot be negative. Please increase the retail price for all variants to be at least equal to the production cost.</p>
+            </div>
+          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={handleSaveDraft}
+              disabled={isSavingDraft || isPublishing || (pricingSummary !== null && pricingSummary.minProfit < 0)}
+            >
+              {isSavingDraft ? 'Saving...' : 'Save as draft'}
+            </Button>
+            <Button
+              onClick={handlePublish}
+              disabled={isSavingDraft || isPublishing || (pricingSummary !== null && pricingSummary.minProfit < 0)}
+            >
+              {isPublishing ? 'Publishing...' : 'Publish'}
+            </Button>
+          </div>
         </div>
         {/* </Card> */}
       </main>

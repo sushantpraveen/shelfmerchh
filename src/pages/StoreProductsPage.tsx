@@ -804,6 +804,7 @@ const StoreProductsPage: React.FC = () => {
               selectedColors={selectedColors}
               selectedSizes={selectedSizes}
               selectedTags={selectedTags}
+              selectedPriceRange={priceRange}
               onFiltersChange={({ materials, colors, sizes, tags, priceRange }) => {
                 setSelectedMaterials(materials);
                 setSelectedColors(colors);
@@ -883,6 +884,7 @@ const StoreProductsPage: React.FC = () => {
                           selectedColors={selectedColors}
                           selectedSizes={selectedSizes}
                           selectedTags={selectedTags}
+                          selectedPriceRange={priceRange}
                           onFiltersChange={({ materials, colors, sizes, tags, priceRange }) => {
                             setSelectedMaterials(materials);
                             setSelectedColors(colors);

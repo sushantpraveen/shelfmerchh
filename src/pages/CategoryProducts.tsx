@@ -197,6 +197,7 @@ const CategoryProducts = () => {
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string[]>>({});
+  const [selectedPriceRange, setSelectedPriceRange] = useState<[number, number]>([0, 5000]);
 
   // Helper: slugify similar to CategorySidebar
   const slugify = (value: string): string => {
@@ -258,7 +259,8 @@ const CategoryProducts = () => {
     selectedSizes.length +
     selectedMaterials.length +
     selectedTags.length +
-    Object.keys(selectedAttributes).length;
+    Object.keys(selectedAttributes).length +
+    (selectedPriceRange[1] < 5000 ? 1 : 0);
 
   // Filter products based on selection
   const filteredProducts = useMemo(() => {
@@ -267,12 +269,16 @@ const CategoryProducts = () => {
       selectedSizes.length === 0 &&
       selectedTags.length === 0 &&
       selectedMaterials.length === 0 &&
-      Object.keys(selectedAttributes).length === 0
+      Object.keys(selectedAttributes).length === 0 &&
+      selectedPriceRange[0] === 0 && selectedPriceRange[1] === 5000
     ) {
       return products;
     }
 
     return products.filter((product: any) => {
+      const productPrice = product.catalogue?.basePrice || 0;
+      const matchesPrice = productPrice >= selectedPriceRange[0] && productPrice <= selectedPriceRange[1];
+
       const matchesColor = selectedColors.length === 0 ||
         (product.availableColors && product.availableColors.some((c: string) => selectedColors.includes(c)));
 
@@ -298,9 +304,9 @@ const CategoryProducts = () => {
         return values.includes(productValue);
       });
 
-      return matchesColor && matchesSize && matchesTags && matchesAttributes && matchesMaterial;
+      return matchesPrice && matchesColor && matchesSize && matchesTags && matchesAttributes && matchesMaterial;
     });
-  }, [products, selectedColors, selectedSizes, selectedTags, selectedMaterials, selectedAttributes]);
+  }, [products, selectedColors, selectedSizes, selectedTags, selectedMaterials, selectedAttributes, selectedPriceRange]);
 
   const toggleColor = (color: string) => {
     setSelectedColors(prev =>
@@ -359,6 +365,7 @@ const CategoryProducts = () => {
     setSelectedMaterials([]);
     setSelectedTags([]);
     setSelectedAttributes({});
+    setSelectedPriceRange([0, 5000]);
   };
 
   // Determine if slug is a main category or subcategory
@@ -1028,10 +1035,12 @@ const CategoryProducts = () => {
                   selectedMaterials={selectedMaterials}
                   selectedColors={selectedColors}
                   selectedSizes={selectedSizes}
-                  onFiltersChange={({ materials, colors, sizes }) => {
+                  selectedPriceRange={selectedPriceRange}
+                  onFiltersChange={({ materials, colors, sizes, priceRange }) => {
                     setSelectedMaterials(materials);
                     setSelectedColors(colors);
                     setSelectedSizes(sizes);
+                    if (priceRange) setSelectedPriceRange(priceRange);
                   }}
                 />
                 <div className="mt-8 pt-6 border-t">
@@ -1053,10 +1062,12 @@ const CategoryProducts = () => {
               selectedMaterials={selectedMaterials}
               selectedColors={selectedColors}
               selectedSizes={selectedSizes}
-              onFiltersChange={({ materials, colors, sizes }) => {
+              selectedPriceRange={selectedPriceRange}
+              onFiltersChange={({ materials, colors, sizes, priceRange }) => {
                 setSelectedMaterials(materials);
                 setSelectedColors(colors);
                 setSelectedSizes(sizes);
+                if (priceRange) setSelectedPriceRange(priceRange);
               }}
             />
           </div>

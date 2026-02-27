@@ -120,6 +120,8 @@ interface FilterSidebarProps {
   selectedColors: string[];
   selectedSizes: string[];
   selectedTags?: string[];
+  selectedPriceRange?: [number, number];
+  maxPrice?: number;
   onFiltersChange: (filters: {
     materials: string[];
     colors: string[];
@@ -138,10 +140,10 @@ export const FilterSidebar = ({
   selectedColors,
   selectedSizes,
   selectedTags = [],
+  selectedPriceRange = [0, 5000],
+  maxPrice = 5000,
   onFiltersChange,
 }: FilterSidebarProps) => {
-  // priceRange remains local for slider but informs parent
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]);
 
   const updateFilters = (opts: {
     materials?: string[];
@@ -155,7 +157,7 @@ export const FilterSidebar = ({
       colors: opts.colors !== undefined ? opts.colors : selectedColors,
       sizes: opts.sizes !== undefined ? opts.sizes : selectedSizes,
       tags: opts.tags !== undefined ? opts.tags : selectedTags,
-      priceRange: opts.priceRange !== undefined ? opts.priceRange : priceRange,
+      priceRange: opts.priceRange !== undefined ? opts.priceRange : selectedPriceRange,
     });
   };
 
@@ -189,7 +191,6 @@ export const FilterSidebar = ({
 
   const handlePriceChange = (value: number) => {
     const nextRange: [number, number] = [0, value];
-    setPriceRange(nextRange);
     updateFilters({ priceRange: nextRange });
   };
 
@@ -198,16 +199,15 @@ export const FilterSidebar = ({
     selectedColors.length +
     selectedSizes.length +
     selectedTags.length +
-    (priceRange[1] < 5000 ? 1 : 0);
+    (selectedPriceRange[1] < maxPrice ? 1 : 0);
 
   const clearAllFilters = () => {
-    setPriceRange([0, 5000]);
     onFiltersChange({
       materials: [],
       colors: [],
       sizes: [],
       tags: [],
-      priceRange: [0, 5000],
+      priceRange: [0, maxPrice],
     });
   };
 
@@ -291,14 +291,14 @@ export const FilterSidebar = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm font-medium">
               <span className="text-foreground">₹0</span>
-              <span className="text-foreground">₹{priceRange[1]}</span>
+              <span className="text-foreground">₹{selectedPriceRange[1]}</span>
             </div>
 
             <input
               type="range"
               min={0}
-              max={5000}
-              value={priceRange[1]}
+              max={maxPrice}
+              value={selectedPriceRange[1]}
               onChange={(e) => handlePriceChange(parseInt(e.target.value))}
               className="w-full h-2 cursor-pointer bg-green-500 rounded-full appearance-none
                            [&::-webkit-slider-thumb]:appearance-none

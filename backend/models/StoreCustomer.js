@@ -92,6 +92,10 @@ const StoreCustomerSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    signupMethod: {
+      type: String,
+      enum: ['email', 'phone'],
+    },
   },
   {
     timestamps: true,

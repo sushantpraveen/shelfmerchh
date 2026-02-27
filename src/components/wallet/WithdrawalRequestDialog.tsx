@@ -38,8 +38,8 @@ const WithdrawalRequestDialog: React.FC<WithdrawalRequestDialogProps> = ({
         const numAmount = parseFloat(amount);
         if (isNaN(numAmount) || numAmount <= 0) {
             newErrors.amount = 'Please enter a valid amount';
-        } else if (numAmount < 100) {
-            newErrors.amount = 'Minimum withdrawal amount is ₹100';
+        } else if (numAmount < 500) {
+            newErrors.amount = 'Minimum withdrawal amount is ₹500';
         } else if (numAmount * 100 > availableBalancePaise) {
             newErrors.amount = `Maximum available: ₹${(availableBalancePaise / 100).toFixed(2)}`;
         }
@@ -101,7 +101,7 @@ const WithdrawalRequestDialog: React.FC<WithdrawalRequestDialogProps> = ({
                         Request Withdrawal
                     </DialogTitle>
                     <DialogDescription>
-                        Enter the amount and UPI ID for payout. Minimum withdrawal is ₹100.
+                        Enter the amount and UPI ID for payout. Minimum withdrawal is ₹500.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -125,7 +125,7 @@ const WithdrawalRequestDialog: React.FC<WithdrawalRequestDialogProps> = ({
                                 <Input
                                     id="amount"
                                     type="number"
-                                    min="100"
+                                    min="500"
                                     step="1"
                                     placeholder="0.00"
                                     className={`pl-8 ${errors.amount ? 'border-destructive' : ''}`}
