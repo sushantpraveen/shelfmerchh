@@ -1555,9 +1555,26 @@ const DesignEditor: React.FC = () => {
       }
     }
 
-    // Return updates with constrained position if needed
-    if (constrainedX !== currentX || constrainedY !== currentY) {
-      return { ...updates, x: constrainedX, y: constrainedY };
+    // Also clamp the element width so text can never be wider than print area
+    let constrainedWidth = updates.width !== undefined ? updates.width : (element.width || undefined);
+    // If the element has no width at all, set it to the print area width so text wraps
+    if (constrainedWidth === undefined) {
+      constrainedWidth = printArea.width;
+    } else if (constrainedWidth > printArea.width) {
+      constrainedWidth = printArea.width;
+    }
+
+    const originalWidth = updates.width !== undefined ? updates.width : element.width;
+    const widthChanged = constrainedWidth !== originalWidth;
+
+    // Return updates with constrained position and width if needed
+    if (constrainedX !== currentX || constrainedY !== currentY || widthChanged) {
+      return {
+        ...updates,
+        x: constrainedX,
+        y: constrainedY,
+        ...(widthChanged ? { width: constrainedWidth } : {}),
+      };
     }
 
     return updates;
@@ -2047,8 +2064,9 @@ const DesignEditor: React.FC = () => {
     addElement({
       type: 'text',
       text: textInput,
-      x: targetArea.x + targetArea.width / 2,
+      x: targetArea.x,
       y: targetArea.y + targetArea.height / 2,
+      width: targetArea.width,
       fontSize,
       fontFamily: selectedFont,
       fill: textColor,
