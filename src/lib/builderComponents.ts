@@ -172,48 +172,48 @@ export const componentLibrary: ComponentDefinition[] = [
   //     padding: { top: 48, right: 32, bottom: 48, left: 32 },
   //   },
   // },
-  {
-    type: 'newsletter',
-    name: 'Newsletter Signup',
-    description: 'Email capture form',
-    icon: 'Mail',
-    category: 'marketing',
-    defaultSettings: {
-      heading: 'Stay Updated',
-      description: 'Subscribe to get special offers and updates',
-      buttonText: 'Subscribe',
-      placeholder: 'Enter your email',
-      successMessage: 'Thanks for subscribing!',
-    },
-    defaultStyles: {
-      backgroundColor: '#f9fafb',
-      padding: { top: 64, right: 32, bottom: 64, left: 32 },
-      textAlign: 'center',
-    },
-  },
-  {
-    type: 'testimonials',
-    name: 'Testimonials',
-    description: 'Customer reviews and testimonials',
-    icon: 'MessageSquare',
-    category: 'marketing',
-    defaultSettings: {
-      heading: 'What Our Customers Say',
-      testimonials: [
-        {
-          name: 'John Doe',
-          rating: 5,
-          text: 'Amazing products and great service!',
-          avatar: '',
-        },
-      ],
-      layout: 'carousel',
-    },
-    defaultStyles: {
-      backgroundColor: '#ffffff',
-      padding: { top: 64, right: 32, bottom: 64, left: 32 },
-    },
-  },
+  // {
+  //   type: 'newsletter',
+  //   name: 'Newsletter Signup',
+  //   description: 'Email capture form',
+  //   icon: 'Mail',
+  //   category: 'marketing',
+  //   defaultSettings: {
+  //     heading: 'Stay Updated',
+  //     description: 'Subscribe to get special offers and updates',
+  //     buttonText: 'Subscribe',
+  //     placeholder: 'Enter your email',
+  //     successMessage: 'Thanks for subscribing!',
+  //   },
+  //   defaultStyles: {
+  //     backgroundColor: '#f9fafb',
+  //     padding: { top: 64, right: 32, bottom: 64, left: 32 },
+  //     textAlign: 'center',
+  //   },
+  // },
+  // {
+  //   type: 'testimonials',
+  //   name: 'Testimonials',
+  //   description: 'Customer reviews and testimonials',
+  //   icon: 'MessageSquare',
+  //   category: 'marketing',
+  //   defaultSettings: {
+  //     heading: 'What Our Customers Say',
+  //     testimonials: [
+  //       {
+  //         name: 'John Doe',
+  //         rating: 5,
+  //         text: 'Amazing products and great service!',
+  //         avatar: '',
+  //       },
+  //     ],
+  //     layout: 'carousel',
+  //   },
+  //   defaultStyles: {
+  //     backgroundColor: '#ffffff',
+  //     padding: { top: 64, right: 32, bottom: 64, left: 32 },
+  //   },
+  // },
   {
     type: 'footer',
     name: 'Footer',

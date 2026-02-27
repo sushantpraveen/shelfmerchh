@@ -104,7 +104,7 @@ const ProfilePage = () => {
           </Card>
 
           {/* Notifications */}
-          <Card className="p-6 mb-6">
+          {/* <Card className="p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Notifications</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -122,7 +122,7 @@ const ProfilePage = () => {
                 <Button variant="outline" size="sm">Enable</Button>
               </div>
             </div>
-          </Card>
+          </Card> */}
 
           {/* Danger Zone */}
           <Card className="p-6 border-destructive">

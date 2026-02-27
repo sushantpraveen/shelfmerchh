@@ -411,6 +411,7 @@ const StoreProductPage = () => {
                     description: catData.catalogue?.description || catData.description,
                     name: catData.catalogue?.name || catData.name,
                     sampleMockups: catData.sampleMockups || [],
+                    sizeChart: catData.catalogue?.sizeChart || catData.sizeChart,
                   };
 
                   return {
@@ -952,10 +953,13 @@ const StoreProductPage = () => {
                 <button
                   className="text-sm text-primary hover:underline flex items-center gap-1"
                   onClick={() => {
-                    /* Logic to open size chart modal could go here */
+                    const element = document.getElementById('size-chart');
+                    if (element) {
+                      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
                   }}
                 >
-                  Size Guide
+                  {product.catalogProduct?.sizeChart?.enabled ? 'Size Chart' : 'Size Guide'}
                   <ChevronDown className="w-3 h-3" />
                 </button>
               </div>
@@ -1060,6 +1064,7 @@ const StoreProductPage = () => {
       <div className="mb-12">
         <ProductDescription
           sizeGuide={product.catalogProduct?.description}
+          sizeChart={product.catalogProduct?.sizeChart}
           category={product.categoryId}
           subcategoryIds={product.subcategoryIds || []}
         />

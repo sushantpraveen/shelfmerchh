@@ -433,9 +433,7 @@
   }
 
   /* Smooth scroll highlight effect */
-  .scroll-highlight {
-    animation: highlight-pulse 2s ease-in-out;
-  }
+ 
 
   @keyframes highlight-pulse {
     0% {

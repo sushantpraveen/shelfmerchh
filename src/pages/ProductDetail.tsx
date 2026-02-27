@@ -568,7 +568,7 @@ const ProductDetail = () => {
                     }}
                     className="text-xs text-primary hover:underline"
                   >
-                    Size Chart
+                    {product.catalogue?.sizeChart?.enabled ? 'Size Chart' : 'Size Guide'}
                   </a>
                 </div>
                 <div className="flex flex-wrap gap-2.5">
@@ -696,6 +696,7 @@ const ProductDetail = () => {
           {/* Product Description */}
           <ProductDescription
             sizeGuide={product.catalogue?.description}
+            sizeChart={product.catalogue?.sizeChart}
             category={product.catalogue?.categoryId}
             subcategoryIds={product.catalogue?.subcategoryIds}
           />

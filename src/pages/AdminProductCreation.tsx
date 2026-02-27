@@ -172,7 +172,7 @@ const AdminProductCreation = () => {
                 enabled: false,
                 rows: 3,
                 cols: 3,
-                data: Array(3).fill(Array(3).fill(''))
+                data: Array(3).fill(null).map(() => Array(3).fill(''))
               },
             });
           }

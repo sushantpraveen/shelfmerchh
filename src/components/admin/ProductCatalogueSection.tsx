@@ -247,16 +247,158 @@ export const ProductCatalogueSection = ({ data, onChange }: ProductCatalogueSect
         />
       </div>
 
-      {/* Description */}
-      <div className="space-y-2">
-        <Label htmlFor="description">Size Guide (HTML) *</Label>
-        <Textarea
-          id="description"
-          placeholder="Enter product description"
-          value={data.description}
-          onChange={(e) => onChange({ ...data, description: e.target.value })}
-          rows={12}
-        />
+      {/* Description / Size Chart Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="sizeChartEnabled" className="text-base font-semibold cursor-pointer">
+            {data.sizeChart?.enabled ? 'Size Chart' : 'Size Guide (HTML)'}
+          </Label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {data.sizeChart?.enabled ? 'Switch to HTML' : 'Use Table Editor'}
+            </span>
+            <Switch
+              id="sizeChartEnabled"
+              checked={data.sizeChart?.enabled || false}
+              onCheckedChange={(checked) =>
+                onChange({
+                  ...data,
+                  sizeChart: {
+                    enabled: checked,
+                    rows: data.sizeChart?.rows || 3,
+                    cols: data.sizeChart?.cols || 3,
+                    data: data.sizeChart?.data || Array(3).fill(null).map(() => Array(3).fill(''))
+                  }
+                })
+              }
+            />
+          </div>
+        </div>
+
+        {!data.sizeChart?.enabled ? (
+          <div className="space-y-2">
+            <Textarea
+              id="description"
+              placeholder="Enter size guide HTML content"
+              value={data.description}
+              onChange={(e) => onChange({ ...data, description: e.target.value })}
+              rows={12}
+            />
+          </div>
+        ) : (
+          <div className="space-y-4 border rounded-md p-4 bg-muted/20">
+            <div className="flex gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sc-rows">Rows</Label>
+                <Input
+                  id="sc-rows"
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={data.sizeChart.rows}
+                  onChange={(e) => {
+                    const rows = parseInt(e.target.value) || 0;
+                    if (rows < 1 || rows > 20) return;
+                    const newData = [...data.sizeChart!.data];
+                    if (rows > newData.length) {
+                      const cols = data.sizeChart!.cols;
+                      for (let i = newData.length; i < rows; i++) {
+                        newData.push(Array(cols).fill(''));
+                      }
+                    } else if (rows < newData.length) {
+                      newData.length = rows;
+                    }
+                    onChange({
+                      ...data,
+                      sizeChart: { ...data.sizeChart!, rows, data: newData }
+                    });
+                  }}
+                  className="w-20"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sc-cols">Columns</Label>
+                <Input
+                  id="sc-cols"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={data.sizeChart.cols}
+                  onChange={(e) => {
+                    const cols = parseInt(e.target.value) || 0;
+                    if (cols < 1 || cols > 10) return;
+                    const newData = data.sizeChart!.data.map(row => {
+                      const newRow = [...row];
+                      if (cols > newRow.length) {
+                        for (let i = newRow.length; i < cols; i++) {
+                          newRow.push('');
+                        }
+                      } else if (cols < newRow.length) {
+                        newRow.length = cols;
+                      }
+                      return newRow;
+                    });
+                    onChange({
+                      ...data,
+                      sizeChart: { ...data.sizeChart!, cols, data: newData }
+                    });
+                  }}
+                  className="w-20"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {Array.from({ length: data.sizeChart.cols }).map((_, colIndex) => (
+                      <TableHead key={colIndex} className="p-1">
+                        <Input
+                          value={data.sizeChart!.data[0]?.[colIndex] || ''}
+                          onChange={(e) => {
+                            const newData = [...data.sizeChart!.data];
+                            if (!newData[0]) newData[0] = Array(data.sizeChart!.cols).fill('');
+                            newData[0][colIndex] = e.target.value;
+                            onChange({
+                              ...data,
+                              sizeChart: { ...data.sizeChart!, data: newData }
+                            });
+                          }}
+                          className="h-8 font-bold bg-muted"
+                          placeholder={colIndex === 0 ? "Size" : "Header"}
+                        />
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.sizeChart.data.slice(1).map((row, rowIndex) => (
+                    <TableRow key={rowIndex + 1}>
+                      {row.map((cell, colIndex) => (
+                        <TableCell key={colIndex} className="p-1">
+                          <Input
+                            value={cell}
+                            onChange={(e) => {
+                              const newData = [...data.sizeChart!.data];
+                              newData[rowIndex + 1][colIndex] = e.target.value;
+                              onChange({
+                                ...data,
+                                sizeChart: { ...data.sizeChart!, data: newData }
+                              });
+                            }}
+                            className="h-8"
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="text-xs text-muted-foreground">First row is treated as the header.</p>
+          </div>
+        )}
       </div>
 
       {/* Category */}
@@ -348,177 +490,6 @@ export const ProductCatalogueSection = ({ data, onChange }: ProductCatalogueSect
         </>
       )}
 
-      {/* Size Chart Section */}
-      <Separator />
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="text-base font-semibold">Size Chart</Label>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="sizeChartEnabled" className="text-sm font-normal text-muted-foreground">
-              {data.sizeChart?.enabled ? 'Enabled' : 'Disabled'}
-            </Label>
-            <Switch
-              id="sizeChartEnabled"
-              checked={data.sizeChart?.enabled || false}
-              onCheckedChange={(checked) =>
-                onChange({
-                  ...data,
-                  sizeChart: {
-                    enabled: checked,
-                    rows: data.sizeChart?.rows || 3,
-                    cols: data.sizeChart?.cols || 3,
-                    data: data.sizeChart?.data || Array(3).fill(Array(3).fill(''))
-                  }
-                })
-              }
-            />
-          </div>
-        </div>
-
-        {data.sizeChart?.enabled && (
-          <div className="space-y-4 border rounded-md p-4 bg-muted/20">
-            <div className="flex gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="sc-rows">Rows</Label>
-                <Input
-                  id="sc-rows"
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={data.sizeChart.rows}
-                  onChange={(e) => {
-                    const rows = parseInt(e.target.value) || 0;
-                    if (rows < 1 || rows > 20) return;
-
-                    // Resize data array
-                    const newData = [...data.sizeChart!.data];
-                    if (rows > newData.length) {
-                      // Add rows
-                      const cols = data.sizeChart!.cols;
-                      for (let i = newData.length; i < rows; i++) {
-                        newData.push(Array(cols).fill(''));
-                      }
-                    } else if (rows < newData.length) {
-                      // Remove rows
-                      newData.length = rows;
-                    }
-
-                    onChange({
-                      ...data,
-                      sizeChart: {
-                        ...data.sizeChart!,
-                        rows,
-                        data: newData
-                      }
-                    });
-                  }}
-                  className="w-20"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sc-cols">Columns</Label>
-                <Input
-                  id="sc-cols"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={data.sizeChart.cols}
-                  onChange={(e) => {
-                    const cols = parseInt(e.target.value) || 0;
-                    if (cols < 1 || cols > 10) return;
-
-                    // Resize each row
-                    const newData = data.sizeChart!.data.map(row => {
-                      const newRow = [...row];
-                      if (cols > newRow.length) {
-                        // Add cols
-                        for (let i = newRow.length; i < cols; i++) {
-                          newRow.push('');
-                        }
-                      } else if (cols < newRow.length) {
-                        // Remove cols
-                        newRow.length = cols;
-                      }
-                      return newRow;
-                    });
-
-                    onChange({
-                      ...data,
-                      sizeChart: {
-                        ...data.sizeChart!,
-                        cols,
-                        data: newData
-                      }
-                    });
-                  }}
-                  className="w-20"
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {Array.from({ length: data.sizeChart.cols }).map((_, colIndex) => (
-                      <TableHead key={colIndex} className="p-1">
-                        <Input
-                          value={data.sizeChart!.data[0]?.[colIndex] || ''}
-                          onChange={(e) => {
-                            const newData = [...data.sizeChart!.data];
-                            // Ensure first row exists (header row usually)
-                            if (!newData[0]) newData[0] = Array(data.sizeChart!.cols).fill('');
-                            newData[0][colIndex] = e.target.value;
-
-                            onChange({
-                              ...data,
-                              sizeChart: {
-                                ...data.sizeChart!,
-                                data: newData
-                              }
-                            });
-                          }}
-                          className="h-8 font-bold bg-muted"
-                          placeholder={colIndex === 0 ? "Size" : "Header"}
-                        />
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.sizeChart.data.slice(1).map((row, rowIndex) => (
-                    <TableRow key={rowIndex + 1}>
-                      {row.map((cell, colIndex) => (
-                        <TableCell key={colIndex} className="p-1">
-                          <Input
-                            value={cell}
-                            onChange={(e) => {
-                              const newData = [...data.sizeChart!.data];
-                              newData[rowIndex + 1][colIndex] = e.target.value;
-
-                              onChange({
-                                ...data,
-                                sizeChart: {
-                                  ...data.sizeChart!,
-                                  data: newData
-                                }
-                              });
-                            }}
-                            className="h-8"
-                          />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              First row is treated as the header.
-            </p>
-          </div>
-        )}
-      </div>
 
       <Separator />
 

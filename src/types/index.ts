@@ -2,6 +2,8 @@ export type OrderStatus = 'on-hold' | 'in-production' | 'shipped' | 'delivered' 
 
 export type StoreTheme = 'modern' | 'classic' | 'minimal';
 
+import { SizeChartData } from './product';
+
 export interface Product {
   id: string;
   userId: string;
@@ -38,6 +40,7 @@ export interface Product {
     productTypeCode?: string;
     attributes?: Record<string, any>;
     sampleMockups?: any[];
+    sizeChart?: SizeChartData;
   };
   createdAt: string;
   updatedAt: string;
