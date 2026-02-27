@@ -44,6 +44,36 @@ const handleShopifyError = (error, res) => {
   return res.status(500).json({ success: false, message: error.message });
 };
 
+/**
+ * Register a webhook using Shopify Admin REST API
+ */
+async function registerShopifyWebhook(shop, accessToken, topic, address) {
+  try {
+    const url = `https://${shop}/admin/api/2024-01/webhooks.json`;
+    const response = await axios.post(
+      url,
+      {
+        webhook: {
+          topic: topic,
+          address: address,
+          format: 'json'
+        }
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': accessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    console.log(`[Shopify Webhook] Registered ${topic} for ${shop}:`, response.data.webhook.id);
+    return response.data.webhook.id;
+  } catch (error) {
+    console.error(`[Shopify Webhook Error] Failed to register ${topic} for ${shop}:`, error.response?.data || error.message);
+    return null;
+  }
+}
+
 const jwt = require('jsonwebtoken');
 
 // @route   GET /api/shopify/start
@@ -144,13 +174,28 @@ router.get('/callback', async (req, res) => {
       uninstalledAt: null
     };
 
-    await ShopifyStore.findOneAndUpdate(
+    const store = await ShopifyStore.findOneAndUpdate(
       { shop: sanitizedShop },
       { $set: updateData },
       { upsert: true, new: true }
     );
 
     console.log(`[Shopify Callback] Installed shop=${sanitizedShop}`);
+
+    // REGISTER WEBHOOKS (Step-5)
+    try {
+      const publicBase = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+      const webhookAddress = `${publicBase}/api/shopify/webhooks/app-uninstalled`;
+      const webhookId = await registerShopifyWebhook(sanitizedShop, access_token, 'app/uninstalled', webhookAddress);
+      
+      if (webhookId) {
+        if (!store.webhookIds) store.webhookIds = new Map();
+        store.webhookIds.set('app_uninstalled', webhookId.toString());
+        await store.save();
+      }
+    } catch (whErr) {
+      console.error('[Shopify Callback] Webhook registration failed:', whErr.message);
+    }
 
     res.clearCookie('shopify_state', { path: '/', signed: true });
     res.clearCookie('merchant_id', { path: '/', signed: true });
@@ -334,11 +379,18 @@ router.post('/webhooks/orders-updated', handleShopifyWebhook);
 const handleAppUninstalled = async (req, res) => {
   const hmacHeader = req.get('x-shopify-hmac-sha256');
   const shopDomain = (req.get('x-shopify-shop-domain') || '').toLowerCase();
-  const rawBody = req.body.toString('utf8');
+  
+  // RAW BODY is in req.body because of express.raw middleware in server.js
+  const rawBody = req.body; 
 
   try {
     const secret = process.env.SHOPIFY_WEBHOOK_SECRET || process.env.SHOPIFY_API_SECRET;
-    if (!verifyShopifyWebhook(rawBody, hmacHeader, secret)) {
+    
+    // Pass Buffer directly if verifyShopifyWebhook supports it, otherwise rawBody.toString('utf8')
+    const verifyBody = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody;
+
+    if (!verifyShopifyWebhook(verifyBody, hmacHeader, secret)) {
+      console.log('[Uninstall Webhook] HMAC verification failed for:', shopDomain);
       return res.status(401).send('Invalid signature');
     }
 
@@ -354,17 +406,18 @@ const handleAppUninstalled = async (req, res) => {
         $set: {
           isActive: false,
           accessToken: null,
-          merchantId: null,
           uninstalledAt: new Date()
         }
       }
     );
 
-    console.log(`[Uninstall Webhook] App uninstalled for shop: ${sanitizedShop}`);
+    console.log('[Shopify Webhook] topic: app/uninstalled, shop:', shopDomain, 'UNINSTALL PROCESSED');
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('[Uninstall Webhook Error]', err);
-    return res.status(500).json({ ok: false });
+    // Shopify expects 200 to acknowledge receipt even if processing fails internally, 
+    // but a 5xx will trigger retries. Requirement says "Return 200 always".
+    return res.status(200).json({ ok: false, error: err.message });
   }
 };
 
