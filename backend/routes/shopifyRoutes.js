@@ -110,11 +110,10 @@ router.get('/callback', async (req, res) => {
   const { shop, code, state, host } = req.query;
   const sanitizedShop = sanitizeShop(shop);
 
-  // Read state cookie (required) and merchant cookie (optional)
+  // Read state cookie (required)
   const cookieState = req.signedCookies.shopify_state || req.cookies.shopify_state;
-  const merchantId = req.signedCookies.merchant_id || req.cookies.merchant_id || null;
 
-  // Validate state cookie (HMAC protection). merchantId is NOT required.
+  // Validate state cookie (HMAC protection).
   if (!state || !cookieState || state !== cookieState) {
     console.log('[Shopify CALLBACK FAIL] state mismatch', { state, cookieState });
     return res.status(403).send('Request origin could not be verified. Please try again.');
@@ -136,6 +135,7 @@ router.get('/callback', async (req, res) => {
 
     // UPSERT by shop ONLY (one record per shop)
     const updateData = {
+      merchantId: null, // ensure not linked after install
       accessToken: access_token,
       scope: scope,
       scopes: scope ? scope.split(',') : [],
@@ -144,20 +144,16 @@ router.get('/callback', async (req, res) => {
       uninstalledAt: null
     };
 
-    // Only set merchantId if we have it from cookie
-    if (merchantId) {
-      updateData.merchantId = merchantId;
-    }
-
     await ShopifyStore.findOneAndUpdate(
       { shop: sanitizedShop },
       { $set: updateData },
       { upsert: true, new: true }
     );
 
-    console.log(`[Shopify Callback] Installed shop=${sanitizedShop}, merchantId=${merchantId || 'none'}`);
+    console.log(`[Shopify Callback] Installed shop=${sanitizedShop}`);
 
     res.clearCookie('shopify_state', { path: '/', signed: true });
+    res.clearCookie('merchant_id', { path: '/', signed: true });
 
     // Redirect to Embedded App Page, preserving host if available
     const appBase = (process.env.APP_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:8080').replace(/\/$/, '');
@@ -358,6 +354,7 @@ const handleAppUninstalled = async (req, res) => {
         $set: {
           isActive: false,
           accessToken: null,
+          merchantId: null,
           uninstalledAt: new Date()
         }
       }
