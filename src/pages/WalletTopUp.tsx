@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import logo from "@/assets/logo.webp";
 import {
     Package,
     Store,
@@ -186,9 +187,14 @@ const WalletTopUp = () => {
             {/* Sidebar - Reusing Orders sidebar logic */}
             <aside className="fixed left-0 top-0 h-full w-64 border-r bg-card p-6">
                 <Link to="/" className="flex items-center space-x-2 mb-8">
-                    <span className="font-heading text-xl font-bold text-foreground">
+                    {/* <span className="font-heading text-xl font-bold text-foreground">
                         Shelf<span className="text-primary">Merch</span>
-                    </span>
+                    </span> */}
+                    <img
+                        src={logo}
+                        alt="logo"
+                        className="w-40 rounded-3xl shadow-2xl"
+                    />
                 </Link>
 
                 <nav className="space-y-2">

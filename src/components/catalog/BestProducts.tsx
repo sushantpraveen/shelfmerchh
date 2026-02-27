@@ -176,19 +176,19 @@ const SectionHeader = ({ title, description }: { title: string; description: str
         {description}
       </p>
     </div>
-    <button className="hidden sm:flex items-center gap-1 text-primary font-medium hover:gap-2 transition-all">
+    {/* <button className="hidden sm:flex items-center gap-1 text-primary font-medium hover:gap-2 transition-all">
       <span>Show All</span>
       <ArrowRight className="w-4 h-4" />
-    </button>
+    </button> */}
   </div>
 );
 
 const MobileShowAll = () => (
   <div className="sm:hidden mt-6 text-center">
-    <button className="inline-flex items-center gap-1 text-primary font-medium">
+    {/* <button className="inline-flex items-center gap-1 text-primary font-medium">
       <span>Show All</span>
       <ArrowRight className="w-4 h-4" />
-    </button>
+    </button> */}
   </div>
 );
 

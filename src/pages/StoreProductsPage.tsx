@@ -985,7 +985,7 @@ const StoreProductsPage: React.FC = () => {
               <div
                 className={
                   viewMode === 'grid'
-                    ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6'
+                    ? 'grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3'
                     : 'space-y-4'
                 }
               >
@@ -1046,7 +1046,7 @@ const StoreProductsPage: React.FC = () => {
 
                           <div className="flex items-center justify-between mt-3">
                             <div className="flex items-baseline gap-2">
-                              <span className="text-xl font-bold text-primary">
+                              <span className="text-lg font-bold text-primary">
                                 {formatPrice(product.price)}
                               </span>
                               {product.compareAtPrice && product.compareAtPrice > product.price && (

@@ -1,14 +1,19 @@
 import { Link } from "react-router-dom";
-
+import logo from "@/assets/logo.webp";
 export const Footer = () => {
   return (
     <footer className="w-full border-t bg-muted/50">
       <div className="container py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <h3 className="font-heading text-lg font-bold mb-4">
+            {/* <h3 className="font-heading text-lg font-bold mb-4">
               Shelf<span className="text-primary">Merch</span>
-            </h3>
+            </h3> */}
+            <img
+              src={logo}
+              alt="logo"
+              className="w-40 rounded-3xl shadow-2xl"
+            />
             <p className="text-sm text-muted-foreground">
               Design sell and scale your brand effortlessly with ShelfMerch's print-on-demand platform.
             </p>

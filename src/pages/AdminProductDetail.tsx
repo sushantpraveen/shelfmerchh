@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { productApi } from '@/lib/api';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { MockupPreview } from '@/components/admin/MockupPreview';
+import { SizeChart } from '@/components/SizeChart';
 
 const AdminProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,7 +21,7 @@ const AdminProductDetail = () => {
   useEffect(() => {
     const fetchProduct = async () => {
       if (!id) return;
-      
+
       setIsLoading(true);
       try {
         const response = await productApi.getById(id);
@@ -257,12 +258,24 @@ const AdminProductDetail = () => {
                     </div>
                   )}
                 </div>
-                {product.catalogue?.description && (
+                {(product.catalogue?.sizeChart?.enabled ? (
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-2">Description</p>
-                    <p className="text-base">{product.catalogue.description}</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Size Chart</p>
+                    <div className="border rounded-lg overflow-hidden">
+                      <SizeChart sizeChartData={product.catalogue.sizeChart} hideTitle={true} />
+                    </div>
                   </div>
-                )}
+                ) : (
+                  product.catalogue?.description && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-2">Size Guide (HTML)</p>
+                      <div
+                        className="text-base bg-muted/20 p-4 rounded-md product-description-content"
+                        dangerouslySetInnerHTML={{ __html: product.catalogue.description }}
+                      />
+                    </div>
+                  )
+                ))}
                 {product.catalogue?.tags && product.catalogue.tags.length > 0 && (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-2">Tags</p>
@@ -335,33 +348,33 @@ const AdminProductDetail = () => {
                     {product.design.views.map((view: any, index: number) => (
                       <div key={index} className="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className='col-span-1'>
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold capitalize">{view.key || `View ${index + 1}`}</h3>
-                          {view.placeholders && view.placeholders.length > 0 && (
-                            <Badge variant="secondary">
-                              {view.placeholders.length} print area{view.placeholders.length !== 1 ? 's' : ''}
-                            </Badge>
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold capitalize">{view.key || `View ${index + 1}`}</h3>
+                            {view.placeholders && view.placeholders.length > 0 && (
+                              <Badge variant="secondary">
+                                {view.placeholders.length} print area{view.placeholders.length !== 1 ? 's' : ''}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Visual Mockup Preview with Placeholders */}
+                          {view.mockupImageUrl ? (
+                            <MockupPreview
+                              mockupImageUrl={view.mockupImageUrl}
+                              placeholders={view.placeholders || []}
+                              canvasWidth={800}
+                              canvasHeight={600}
+                              physicalWidth={20}
+                              physicalHeight={24}
+                              unit="in"
+                            />
+                          ) : (
+                            <div className="border rounded-lg p-8 bg-muted flex items-center justify-center min-h-[400px]">
+                              <p className="text-muted-foreground">No mockup image</p>
+                            </div>
                           )}
                         </div>
-                        
-                        {/* Visual Mockup Preview with Placeholders */}
-                        {view.mockupImageUrl ? (
-                          <MockupPreview
-                            mockupImageUrl={view.mockupImageUrl}
-                            placeholders={view.placeholders || []}
-                            canvasWidth={800}
-                            canvasHeight={600}
-                            physicalWidth={20}
-                            physicalHeight={24}
-                            unit="in"
-                          />
-                        ) : (
-                          <div className="border rounded-lg p-8 bg-muted flex items-center justify-center min-h-[400px]">
-                            <p className="text-muted-foreground">No mockup image</p>
-                          </div>
-                        )}
-                        </div>
-                        
+
                         {/* Print Areas Summary */}
                         {view.placeholders && view.placeholders.length > 0 && (
                           <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-4 mt-4">

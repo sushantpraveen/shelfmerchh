@@ -24,9 +24,10 @@ interface SizeChartProps {
     availableSizes?: string[];
     categoryId?: string;
     sizeChartData?: SizeChartData;
+    hideTitle?: boolean;
 }
 
-export const SizeChart = forwardRef<HTMLDivElement, SizeChartProps>(({ availableSizes, categoryId, sizeChartData }, ref) => {
+export const SizeChart = forwardRef<HTMLDivElement, SizeChartProps>(({ availableSizes, categoryId, sizeChartData, hideTitle }, ref) => {
 
     // If custom size chart is enabled, use it
     if (sizeChartData?.enabled && sizeChartData.data.length > 0) {
@@ -35,7 +36,7 @@ export const SizeChart = forwardRef<HTMLDivElement, SizeChartProps>(({ available
 
         return (
             <section ref={ref} id="size-chart" className="space-y-4">
-                <h2 className="section-title">Size Chart</h2>
+                {!hideTitle && <h2 className="section-title">Size Chart</h2>}
                 <div className="rounded-xl border border-border overflow-hidden">
                     <Table>
                         <TableHeader>
@@ -83,7 +84,7 @@ export const SizeChart = forwardRef<HTMLDivElement, SizeChartProps>(({ available
 
     return (
         <section ref={ref} id="size-chart" className="space-y-4">
-            <h2 className="section-title">Size Chart</h2>
+            {!hideTitle && <h2 className="section-title">Size Chart</h2>}
             <div className="rounded-xl border border-border overflow-hidden">
                 <Table>
                     <TableHeader>

@@ -1,5 +1,5 @@
 import dashboardMockup from "@/assets/dashboard-mockup.png";
-
+import logo from "@/assets/logo.webp";
 const LaunchStoreSection = () => {
   return (
     <section className="py-20 bg-background">
@@ -29,10 +29,15 @@ const LaunchStoreSection = () => {
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
               </div>
               <div className="flex-1 flex justify-center">
-                <div className="flex items-center gap-2 px-4 py-1 bg-muted rounded text-sm">
+                {/* <div className="flex items-center gap-2 px-4 py-1 bg-muted rounded text-sm">
                   <span className="text-primary font-semibold">Shelf</span>
                   <span className="text-foreground font-semibold">Merch</span>
-                </div>
+                </div> */}
+                <img
+              src={logo}
+              alt="logo"
+              className="w-40 rounded-3xl shadow-2xl"
+            />
               </div>
             </div>
             

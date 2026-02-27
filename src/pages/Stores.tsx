@@ -9,6 +9,7 @@ import ManageStoreDialog from '@/components/ManageStoreDialog';
 import { storeApi, storeProductsApi } from '@/lib/api';
 import type { Store as StoreType } from '@/types';
 import { toast } from 'sonner';
+import logo from "@/assets/logo.webp";
 import {
   Package,
   Store,
@@ -195,9 +196,14 @@ const Stores = () => {
       {/* Sidebar */}
       <aside className="hidden lg:block w-64 border-r bg-muted/10 p-6 space-y-8 sticky top-0 h-screen overflow-y-auto">
         <Link to="/" className="flex items-center space-x-2">
-          <span className="font-heading text-xl font-bold text-foreground">
+          {/* <span className="font-heading text-xl font-bold text-foreground">
             Shelf<span className="text-primary">Merch</span>
-          </span>
+          </span> */}
+          <img
+              src={logo}
+              alt="logo"
+              className="w-40 rounded-3xl shadow-2xl"
+            />
         </Link>
 
         <nav className="space-y-2">

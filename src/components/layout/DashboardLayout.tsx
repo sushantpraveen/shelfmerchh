@@ -454,15 +454,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           <Button variant={isActiveRoute('/wallet') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
             <Link to="/wallet"><Wallet className="mr-2 h-4 w-4" />Wallet</Link>
           </Button>
-          <Button variant={isActiveRoute('/invoices') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
+          {/* <Button variant={isActiveRoute('/invoices') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
             <Link to="/invoices"><FileText className="mr-2 h-4 w-4" />Invoices</Link>
-          </Button>
+          </Button> */}
           <Button variant={isActiveRoute('/customers') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
             <Link to="/customers"><Users className="mr-2 h-4 w-4" />Customers</Link>
           </Button>
-          <Button variant={isActiveRoute('/analytics') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
+          {/* <Button variant={isActiveRoute('/analytics') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
             <Link to="/analytics"><TrendingUp className="mr-2 h-4 w-4" />Analytics</Link>
-          </Button>
+          </Button> */}
           {isAdmin && (
             <Button variant={isActiveRoute('/admin') ? 'secondary' : 'ghost'} className="w-full justify-start" asChild>
               <Link to="/admin"><Users className="mr-2 h-4 w-4" />Admin Panel</Link>

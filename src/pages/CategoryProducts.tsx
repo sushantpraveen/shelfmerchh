@@ -1076,7 +1076,7 @@ const CategoryProducts = () => {
             </div>
 
             {/* Product Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3">
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="animate-pulse">

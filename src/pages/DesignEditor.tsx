@@ -29,12 +29,30 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   Upload, Type, Image as ImageIcon, Folder, Sparkles, Undo2, Redo2,
   ZoomIn, ZoomOut, Move, Copy, Trash2, X, Plus, Package, Menu, Save, Layers, Eye, EyeOff,
   Lock, Unlock, AlignLeft, AlignCenter, AlignRight, Bold, Italic,
   Underline, Palette, Grid, Ruler, Download, Settings, Settings2, ChevronRight,
   ChevronLeft, Maximize2, Minimize2, RotateCw, Square, Circle as CircleIcon, Triangle, Sparkles as SparklesIcon, Wand2,
-  Heart, Star as StarIcon, ArrowRight, Search, Filter, SortAsc, FolderOpen, ArrowLeft, ArrowUp, ArrowDown, Pen, Camera, Layout, Hand
+  Heart, Star as StarIcon, ArrowRight, Search, Filter, SortAsc, FolderOpen, ArrowLeft, ArrowUp, ArrowDown, Pen, Camera, Layout, Hand, GripVertical
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { productApi, storeApi, storeProductsApi } from '@/lib/api';
@@ -1341,6 +1359,13 @@ const DesignEditor: React.FC = () => {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const isInInput = activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        (activeElement as HTMLElement).isContentEditable
+      );
+
       if (e.ctrlKey || e.metaKey) {
         switch (e.key) {
           case 'z':
@@ -1391,27 +1416,14 @@ const DesignEditor: React.FC = () => {
             setZoom(prev => Math.max(10, prev - 10));
             break;
         }
-      } else if (e.key === 'Delete') {
-        // Only Delete key deletes layers, not Backspace
-        // Backspace is reserved for text editing
-        deleteSelected();
-      } else if (e.key === 'Backspace') {
-        // Backspace should only work for text editing, not layer deletion
-        // Check if user is in an input field - if so, don't delete layer
-        const activeElement = document.activeElement;
-        const isInInput = activeElement && (
-          activeElement.tagName === 'INPUT' ||
-          activeElement.tagName === 'TEXTAREA' ||
-          (activeElement as HTMLElement).isContentEditable
-        );
-        // Only delete layer if NOT in an input field
-        // This prevents accidental deletion when editing text
-        if (!isInInput) {
+      } else if (!isInInput) {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          // Both Delete and Backspace delete layers when not editing text
           deleteSelected();
+        } else if (e.key.startsWith('Arrow')) {
+          e.preventDefault();
+          nudgeSelected(e.key);
         }
-      } else if (e.key.startsWith('Arrow')) {
-        e.preventDefault();
-        nudgeSelected(e.key);
       }
     };
 
@@ -3046,14 +3058,14 @@ const DesignEditor: React.FC = () => {
             </Button>
           ) : (
             <>
-              <Button variant="outline" size="sm" onClick={handleSave} className="hidden sm:flex">
+              {/* <Button variant="outline" size="sm" onClick={handleSave} className="hidden sm:flex">
                 <Save className="w-4 h-4 mr-2" />
                 Save
-              </Button>
-              <Button variant="default" size="sm" onClick={() => handleExportPreview('png')}>
+              </Button> */}
+              {/* <Button variant="default" size="sm" onClick={() => handleExportPreview('png')}>
                 <Download className="w-4 h-4 mr-2" />
                 <span className="hidden xs:inline ml-1">Export</span>
-              </Button>
+              </Button> */}
             </>
           )}
         </div>
@@ -5425,6 +5437,7 @@ const PropertiesPanel: React.FC<{
   hideElementRow = false,
 }) => {
     const [designTransforms, setDesignTransforms] = useState<Record<string, { x: number; y: number; scale: number }>>({});
+    const [inputValues, setInputValues] = useState<Record<string, string>>({});
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const selectedPlaceholder = selectedPlaceholderId
@@ -5462,11 +5475,15 @@ const PropertiesPanel: React.FC<{
         toast.error('Failed to upload design');
       }
 
-      // Reset input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     };
+
+    // Reset input states when selected element changes
+    useEffect(() => {
+      setInputValues({});
+    }, [selectedElement?.id]);
 
     // Show element properties when element is selected
     if (selectedElement) {
@@ -5807,9 +5824,29 @@ const PropertiesPanel: React.FC<{
                     <Label className="text-sm">Rotate</Label>
                     <div className="flex items-center gap-1">
                       <Input
-                        type="number"
-                        value={Math.round(element.rotation || 0)}
-                        onChange={(e) => onUpdate({ rotation: parseFloat(e.target.value) || 0 })}
+                        inputMode="numeric"
+                        value={inputValues.rotation !== undefined ? inputValues.rotation : Math.round(element.rotation || 0).toString()}
+                        onChange={(e) => {
+                          const rawValue = e.target.value;
+                          if (rawValue === '' || rawValue === '-') {
+                            setInputValues(prev => ({ ...prev, rotation: rawValue }));
+                            return;
+                          }
+                          const cleaned = rawValue.replace(/[^0-9.-]/g, '');
+                          setInputValues(prev => ({ ...prev, rotation: cleaned }));
+                          const val = parseFloat(cleaned);
+                          if (!isNaN(val)) {
+                            onUpdate({ rotation: val });
+                          }
+                        }}
+                        onBlur={() => {
+                          setInputValues(prev => {
+                            const next = { ...prev };
+                            delete next.rotation;
+                            return next;
+                          });
+                          onUpdate({ rotation: Math.round(element.rotation || 0) });
+                        }}
                         className="w-16 h-8 text-sm"
                       />
                       <span className="text-xs text-muted-foreground">deg</span>
@@ -5845,14 +5882,35 @@ const PropertiesPanel: React.FC<{
                           <ArrowLeft className="w-3 h-3" />
                         </Button>
                         <Input
-                          type="number"
-                          value={getPositionPercent(element, 'x').toFixed(2)}
+                          inputMode="decimal"
+                          value={inputValues.left !== undefined ? inputValues.left : getPositionPercent(element, 'x').toFixed(2)}
                           onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
+                            const rawValue = e.target.value;
+                            if (rawValue === '') {
+                              setInputValues(prev => ({ ...prev, left: '' }));
+                              updatePositionPercent('x', 0);
+                              return;
+                            }
+                            const cleaned = rawValue.replace(/[^0-9.]/g, '');
+                            const parts = cleaned.split('.');
+                            const sanitized = parts.length > 2
+                              ? parts[0] + '.' + parts.slice(1).join('')
+                              : cleaned;
+
+                            setInputValues(prev => ({ ...prev, left: sanitized }));
+                            const value = parseFloat(sanitized) || 0;
                             updatePositionPercent('x', value);
                           }}
+                          onBlur={() => {
+                            setInputValues(prev => {
+                              const next = { ...prev };
+                              delete next.left;
+                              return next;
+                            });
+                            const currentPercent = getPositionPercent(element, 'x');
+                            updatePositionPercent('x', parseFloat(currentPercent.toFixed(2)));
+                          }}
                           className="w-20 h-7 text-xs text-center"
-                          step="0.1"
                         />
                         <Button
                           variant="ghost"
@@ -5887,14 +5945,35 @@ const PropertiesPanel: React.FC<{
                           <ArrowUp className="w-3 h-3" />
                         </Button>
                         <Input
-                          type="number"
-                          value={getPositionPercent(element, 'y').toFixed(2)}
+                          inputMode="decimal"
+                          value={inputValues.top !== undefined ? inputValues.top : getPositionPercent(element, 'y').toFixed(2)}
                           onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
+                            const rawValue = e.target.value;
+                            if (rawValue === '') {
+                              setInputValues(prev => ({ ...prev, top: '' }));
+                              updatePositionPercent('y', 0);
+                              return;
+                            }
+                            const cleaned = rawValue.replace(/[^0-9.]/g, '');
+                            const parts = cleaned.split('.');
+                            const sanitized = parts.length > 2
+                              ? parts[0] + '.' + parts.slice(1).join('')
+                              : cleaned;
+
+                            setInputValues(prev => ({ ...prev, top: sanitized }));
+                            const value = parseFloat(sanitized) || 0;
                             updatePositionPercent('y', value);
                           }}
+                          onBlur={() => {
+                            setInputValues(prev => {
+                              const next = { ...prev };
+                              delete next.top;
+                              return next;
+                            });
+                            const currentPercent = getPositionPercent(element, 'y');
+                            updatePositionPercent('y', parseFloat(currentPercent.toFixed(2)));
+                          }}
                           className="w-20 h-7 text-xs text-center"
-                          step="0.1"
                         />
                         <Button
                           variant="ghost"
@@ -5975,10 +6054,23 @@ const PropertiesPanel: React.FC<{
                   <Label className="text-sm">Width</Label>
                   <div className="flex items-center gap-1 mt-1">
                     <Input
-                      type="number"
-                      value={element.width ? (element.width / PX_PER_INCH).toFixed(2) : '0'}
+                      inputMode="decimal"
+                      value={inputValues.width !== undefined ? inputValues.width : (element.width ? (element.width / PX_PER_INCH).toFixed(2) : '0')}
                       onChange={(e) => {
-                        const inches = parseFloat(e.target.value) || 0;
+                        const rawValue = e.target.value;
+                        if (rawValue === '') {
+                          setInputValues(prev => ({ ...prev, width: '' }));
+                          onUpdate({ width: 0 });
+                          return;
+                        }
+                        const cleaned = rawValue.replace(/[^0-9.]/g, '');
+                        const parts = cleaned.split('.');
+                        const sanitized = parts.length > 2
+                          ? parts[0] + '.' + parts.slice(1).join('')
+                          : cleaned;
+
+                        setInputValues(prev => ({ ...prev, width: sanitized }));
+                        const inches = parseFloat(sanitized) || 0;
                         const pixels = inches * PX_PER_INCH;
                         if (element.lockAspectRatio && element.width && element.height) {
                           const aspectRatio = element.width / element.height;
@@ -5987,8 +6079,24 @@ const PropertiesPanel: React.FC<{
                           onUpdate({ width: pixels });
                         }
                       }}
+                      onBlur={() => {
+                        setInputValues(prev => {
+                          const next = { ...prev };
+                          delete next.width;
+                          return next;
+                        });
+                        if (element.width) {
+                          const inches = parseFloat((element.width / PX_PER_INCH).toFixed(2));
+                          const pixels = inches * PX_PER_INCH;
+                          if (element.lockAspectRatio && element.height) {
+                            const aspectRatio = element.width / element.height;
+                            onUpdate({ width: pixels, height: pixels / aspectRatio });
+                          } else {
+                            onUpdate({ width: pixels });
+                          }
+                        }
+                      }}
                       className="w-full h-8 text-sm"
-                      step="0.01"
                     />
                     <span className="text-xs text-muted-foreground">in</span>
                   </div>
@@ -5999,10 +6107,23 @@ const PropertiesPanel: React.FC<{
                   <Label className="text-sm">Height</Label>
                   <div className="flex items-center gap-1 mt-1">
                     <Input
-                      type="number"
-                      value={element.height ? (element.height / PX_PER_INCH).toFixed(2) : '0'}
+                      inputMode="decimal"
+                      value={inputValues.height !== undefined ? inputValues.height : (element.height ? (element.height / PX_PER_INCH).toFixed(2) : '0')}
                       onChange={(e) => {
-                        const inches = parseFloat(e.target.value) || 0;
+                        const rawValue = e.target.value;
+                        if (rawValue === '') {
+                          setInputValues(prev => ({ ...prev, height: '' }));
+                          onUpdate({ height: 0 });
+                          return;
+                        }
+                        const cleaned = rawValue.replace(/[^0-9.]/g, '');
+                        const parts = cleaned.split('.');
+                        const sanitized = parts.length > 2
+                          ? parts[0] + '.' + parts.slice(1).join('')
+                          : cleaned;
+
+                        setInputValues(prev => ({ ...prev, height: sanitized }));
+                        const inches = parseFloat(sanitized) || 0;
                         const pixels = inches * PX_PER_INCH;
                         if (element.lockAspectRatio && element.width && element.height) {
                           const aspectRatio = element.width / element.height;
@@ -6011,50 +6132,108 @@ const PropertiesPanel: React.FC<{
                           onUpdate({ height: pixels });
                         }
                       }}
+                      onBlur={() => {
+                        setInputValues(prev => {
+                          const next = { ...prev };
+                          delete next.height;
+                          return next;
+                        });
+                        if (element.height) {
+                          const inches = parseFloat((element.height / PX_PER_INCH).toFixed(2));
+                          const pixels = inches * PX_PER_INCH;
+                          if (element.lockAspectRatio && element.width) {
+                            const aspectRatio = element.width / element.height;
+                            onUpdate({ height: pixels, width: pixels * aspectRatio });
+                          } else {
+                            onUpdate({ height: pixels });
+                          }
+                        }
+                      }}
                       className="w-full h-8 text-sm"
-                      step="0.01"
                     />
                     <span className="text-xs text-muted-foreground">in</span>
                   </div>
                 </div>
 
-                {/* Rotate */}
                 <div>
                   <Label className="text-sm">Rotate</Label>
                   <div className="flex items-center gap-1 mt-1">
                     <Input
-                      type="number"
-                      value={Math.round(element.rotation || 0)}
-                      onChange={(e) => onUpdate({ rotation: parseFloat(e.target.value) || 0 })}
+                      inputMode="numeric"
+                      value={inputValues.rotation !== undefined ? inputValues.rotation : Math.round(element.rotation || 0).toString()}
+                      onChange={(e) => {
+                        const rawValue = e.target.value;
+                        if (rawValue === '' || rawValue === '-') {
+                          setInputValues(prev => ({ ...prev, rotation: rawValue }));
+                          return;
+                        }
+                        const cleaned = rawValue.replace(/[^0-9.-]/g, '');
+                        setInputValues(prev => ({ ...prev, rotation: cleaned }));
+                        const val = parseFloat(cleaned);
+                        if (!isNaN(val)) {
+                          onUpdate({ rotation: val });
+                        }
+                      }}
+                      onBlur={() => {
+                        setInputValues(prev => {
+                          const next = { ...prev };
+                          delete next.rotation;
+                          return next;
+                        });
+                        onUpdate({ rotation: Math.round(element.rotation || 0) });
+                      }}
                       className="w-full h-8 text-sm"
-                      step="1"
                     />
                     <span className="text-xs text-muted-foreground">deg</span>
                   </div>
                 </div>
 
-                {/* Scale */}
                 <div>
                   <Label className="text-sm">Scale</Label>
                   <div className="flex items-center gap-1 mt-1">
                     <Input
-                      type="number"
-                      value={element.scaleX ? Math.round(element.scaleX * 100 * 100) / 100 : '100'}
+                      inputMode="decimal"
+                      value={inputValues.scale !== undefined ? inputValues.scale : (element.scaleX ? Math.round(element.scaleX * 100 * 100) / 100 : '100').toString()}
                       onChange={(e) => {
-                        const scale = parseFloat(e.target.value) || 100;
-                        const scaleValue = scale / 100;
-                        // Update scale while preserving current dimensions
-                        const currentWidth = element.width || 100;
-                        const currentHeight = element.height || 100;
-                        onUpdate({
-                          scaleX: scaleValue,
-                          scaleY: scaleValue,
-                          width: currentWidth * scaleValue,
-                          height: currentHeight * scaleValue
+                        const rawValue = e.target.value;
+                        if (rawValue === '') {
+                          setInputValues(prev => ({ ...prev, scale: '' }));
+                          return;
+                        }
+                        const cleaned = rawValue.replace(/[^0-9.]/g, '');
+                        const parts = cleaned.split('.');
+                        const sanitized = parts.length > 2
+                          ? parts[0] + '.' + parts.slice(1).join('')
+                          : cleaned;
+
+                        setInputValues(prev => ({ ...prev, scale: sanitized }));
+                        const scale = parseFloat(sanitized);
+                        if (!isNaN(scale)) {
+                          const scaleValue = scale / 100;
+                          const currentWidth = element.width || 100;
+                          const currentHeight = element.height || 100;
+                          onUpdate({
+                            scaleX: scaleValue,
+                            scaleY: scaleValue,
+                            width: currentWidth * scaleValue,
+                            height: currentHeight * scaleValue
+                          });
+                        }
+                      }}
+                      onBlur={() => {
+                        setInputValues(prev => {
+                          const next = { ...prev };
+                          delete next.scale;
+                          return next;
                         });
+                        // Final rounding on blur if needed
+                        if (element.scaleX) {
+                          const currentScale = Math.round(element.scaleX * 100 * 100) / 100;
+                          const scaleValue = currentScale / 100;
+                          onUpdate({ scaleX: scaleValue, scaleY: scaleValue });
+                        }
                       }}
                       className="w-full h-8 text-sm"
-                      step="0.01"
                     />
                     <span className="text-xs text-muted-foreground">%</span>
                   </div>
@@ -6087,8 +6266,8 @@ const PropertiesPanel: React.FC<{
                         <ArrowLeft className="w-3 h-3" />
                       </Button>
                       <Input
-                        type="number"
-                        value={(() => {
+                        inputMode="decimal"
+                        value={inputValues.left !== undefined ? inputValues.left : (() => {
                           const placeholder = element.placeholderId
                             ? placeholders.find(p => p.id === element.placeholderId)
                             : null;
@@ -6098,17 +6277,46 @@ const PropertiesPanel: React.FC<{
                           return '0';
                         })()}
                         onChange={(e) => {
+                          const rawValue = e.target.value;
+                          if (rawValue === '') {
+                            setInputValues(prev => ({ ...prev, left: '' }));
+                            const placeholder = element.placeholderId ? placeholders.find(p => p.id === element.placeholderId) : null;
+                            if (placeholder) {
+                              onUpdate({ x: placeholder.x });
+                            }
+                            return;
+                          }
+                          const cleaned = rawValue.replace(/[^0-9.]/g, '');
+                          const parts = cleaned.split('.');
+                          const sanitized = parts.length > 2
+                            ? parts[0] + '.' + parts.slice(1).join('')
+                            : cleaned;
+
+                          setInputValues(prev => ({ ...prev, left: sanitized }));
                           const placeholder = element.placeholderId
                             ? placeholders.find(p => p.id === element.placeholderId)
                             : null;
                           if (placeholder) {
-                            const percent = parseFloat(e.target.value) || 0;
+                            const percent = parseFloat(sanitized) || 0;
                             const newValue = placeholder.x + (placeholder.width * percent / 100);
                             onUpdate({ x: newValue });
                           }
                         }}
+                        onBlur={() => {
+                          setInputValues(prev => {
+                            const next = { ...prev };
+                            delete next.left;
+                            return next;
+                          });
+                          const placeholder = element.placeholderId ? placeholders.find(p => p.id === element.placeholderId) : null;
+                          if (placeholder) {
+                            const currentPercent = ((element.x - placeholder.x) / placeholder.width) * 100;
+                            const formattedPercent = parseFloat(currentPercent.toFixed(2));
+                            const newValue = placeholder.x + (placeholder.width * formattedPercent / 100);
+                            onUpdate({ x: newValue });
+                          }
+                        }}
                         className="w-20 h-7 text-xs text-center"
-                        step="0.1"
                       />
                       <Button
                         variant="ghost"
@@ -6157,8 +6365,8 @@ const PropertiesPanel: React.FC<{
                         <ArrowUp className="w-3 h-3" />
                       </Button>
                       <Input
-                        type="number"
-                        value={(() => {
+                        inputMode="decimal"
+                        value={inputValues.top !== undefined ? inputValues.top : (() => {
                           const placeholder = element.placeholderId
                             ? placeholders.find(p => p.id === element.placeholderId)
                             : null;
@@ -6168,17 +6376,46 @@ const PropertiesPanel: React.FC<{
                           return '0';
                         })()}
                         onChange={(e) => {
+                          const rawValue = e.target.value;
+                          if (rawValue === '') {
+                            setInputValues(prev => ({ ...prev, top: '' }));
+                            const placeholder = element.placeholderId ? placeholders.find(p => p.id === element.placeholderId) : null;
+                            if (placeholder) {
+                              onUpdate({ y: placeholder.y });
+                            }
+                            return;
+                          }
+                          const cleaned = rawValue.replace(/[^0-9.]/g, '');
+                          const parts = cleaned.split('.');
+                          const sanitized = parts.length > 2
+                            ? parts[0] + '.' + parts.slice(1).join('')
+                            : cleaned;
+
+                          setInputValues(prev => ({ ...prev, top: sanitized }));
                           const placeholder = element.placeholderId
                             ? placeholders.find(p => p.id === element.placeholderId)
                             : null;
                           if (placeholder) {
-                            const percent = parseFloat(e.target.value) || 0;
+                            const percent = parseFloat(sanitized) || 0;
                             const newValue = placeholder.y + (placeholder.height * percent / 100);
                             onUpdate({ y: newValue });
                           }
                         }}
+                        onBlur={() => {
+                          setInputValues(prev => {
+                            const next = { ...prev };
+                            delete next.top;
+                            return next;
+                          });
+                          const placeholder = element.placeholderId ? placeholders.find(p => p.id === element.placeholderId) : null;
+                          if (placeholder) {
+                            const currentPercent = ((element.y - placeholder.y) / placeholder.height) * 100;
+                            const formattedPercent = parseFloat(currentPercent.toFixed(2));
+                            const newValue = placeholder.y + (placeholder.height * formattedPercent / 100);
+                            onUpdate({ y: newValue });
+                          }
+                        }}
                         className="w-20 h-7 text-xs text-center"
-                        step="0.1"
                       />
                       <Button
                         variant="ghost"
@@ -6402,6 +6639,136 @@ const PropertiesPanel: React.FC<{
     );
   };
 
+interface SortableLayerItemProps {
+  element: CanvasElement;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  PX_PER_INCH: number;
+}
+
+const SortableLayerItem: React.FC<SortableLayerItemProps> = ({
+  element,
+  isSelected,
+  onSelect,
+  onDelete,
+  PX_PER_INCH
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: element.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 'auto',
+    position: 'relative' as const,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="group"
+    >
+      <div
+        className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${isSelected ? 'bg-primary/10 border-primary/20 border-2 shadow-sm' : 'bg-muted/30 border border-transparent shadow-none hover:bg-muted/50'}`}
+        onClick={() => onSelect(element.id)}
+      >
+        {/* Drag handle */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-muted-foreground/50 hover:text-muted-foreground"
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+
+        {/* Thumbnail */}
+        <div className="w-12 h-12 rounded-lg border bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+          {element.type === 'image' && element.imageUrl ? (
+            <img
+              src={element.imageUrl}
+              alt="Thumbnail"
+              className="w-full h-full object-contain"
+              style={{ imageRendering: 'auto' }}
+            />
+          ) : element.type === 'text' ? (
+            <div className="flex flex-col items-center justify-center w-full h-full bg-white">
+              <span className="text-xs font-bold text-primary leading-none">T</span>
+              <div className="w-full h-[1.5px] bg-primary/20 mt-0.5" />
+            </div>
+          ) : (
+            <Square className="w-5 h-5 text-muted-foreground" />
+          )}
+        </div>
+
+        {/* Name + Dimensions */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold truncate">
+            {element.type === 'text' ? (element.text || 'Text') : (element.name || (element.type === 'image' ? 'Image' : element.shapeType || 'Shape'))}
+          </p>
+          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
+            {element.width ? `${(element.width / (PX_PER_INCH || 96)).toFixed(1)}" × ${(element.height / (PX_PER_INCH || 96)).toFixed(1)}"` : 'Asset'}
+          </p>
+        </div>
+
+        {/* Delete button (always visible as per project requirement) */}
+        <button
+          className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all active:scale-95"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(element.id);
+          }}
+          aria-label="Delete element"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Add a non-sortable version for the drag overlay feedback
+const LayerItemOverlay: React.FC<{
+  element: CanvasElement;
+  PX_PER_INCH: number;
+}> = ({ element, PX_PER_INCH }) => (
+  <div className="flex items-center gap-3 p-3 rounded-xl bg-background border-2 border-primary/20 shadow-xl opacity-90 cursor-grabbing">
+    <div className="p-1 -ml-1 text-primary">
+      <GripVertical className="w-4 h-4" />
+    </div>
+    <div className="w-12 h-12 rounded-lg border bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+      {element.type === 'image' && element.imageUrl ? (
+        <img src={element.imageUrl} alt="" className="w-full h-full object-contain" />
+      ) : element.type === 'text' ? (
+        <div className="flex flex-col items-center justify-center w-full h-full bg-white">
+          <span className="text-xs font-bold text-primary">T</span>
+        </div>
+      ) : (
+        <Square className="w-5 h-5 text-muted-foreground" />
+      )}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-xs font-bold truncate">
+        {element.type === 'text' ? (element.text || 'Text') : (element.name || element.type)}
+      </p>
+      <p className="text-[10px] text-muted-foreground uppercase font-bold">
+        {element.width ? `${(element.width / (PX_PER_INCH || 96)).toFixed(1)}" × ${(element.height / (PX_PER_INCH || 96)).toFixed(1)}"` : 'Asset'}
+      </p>
+    </div>
+    <div className="p-2 text-muted-foreground">
+      <Trash2 className="w-4 h-4" />
+    </div>
+  </div>
+);
+
 const LayersPanel: React.FC<{
   placeholders: Array<{ id: string; x: number; y: number; width: number; height: number; rotation: number; original: Placeholder }>;
   selectedPlaceholderId: string | null;
@@ -6440,6 +6807,17 @@ const LayersPanel: React.FC<{
   PX_PER_INCH = 96,
   canvasPadding = 0,
 }) => {
+    const sensors = useSensors(
+      useSensor(PointerSensor, {
+        activationConstraint: {
+          distance: 5,
+        },
+      }),
+      useSensor(KeyboardSensor, {
+        coordinateGetter: sortableKeyboardCoordinates,
+      })
+    );
+
     const elementsByPlaceholder = useMemo(() => {
       const grouped: Record<string, CanvasElement[]> = {};
       elements.forEach(el => {
@@ -6450,11 +6828,44 @@ const LayersPanel: React.FC<{
       return grouped;
     }, [elements]);
 
-    const displayedElements = selectedPlaceholderId
-      ? elements.filter(e => e.placeholderId === selectedPlaceholderId)
-      : isMobile
-        ? elements.filter(e => !e.placeholderId) // On mobile, only show unassigned elements in the main list
-        : elements;
+    const [activeId, setActiveId] = useState<string | null>(null);
+
+    const handleDragStart = (event: { active: { id: any } }) => {
+      setActiveId(event.active.id);
+    };
+
+    const handleDragEnd = (event: DragEndEvent, placeholderId: string) => {
+      const { active, over } = event;
+      setActiveId(null);
+
+      if (over && active.id !== over.id) {
+        const currentPlaceholderElements = elementsByPlaceholder[placeholderId] || [];
+        // Visual order is zIndex descending
+        const sortedPlaceholderElements = [...currentPlaceholderElements].sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+
+        const oldIndex = sortedPlaceholderElements.findIndex(el => el.id === active.id);
+        const newIndex = sortedPlaceholderElements.findIndex(el => el.id === over.id);
+
+        const reordered = arrayMove(sortedPlaceholderElements, oldIndex, newIndex);
+
+        // Capture current z-index pool to preserve global stack position
+        const zIndexPool = sortedPlaceholderElements.map(el => el.zIndex || 0).sort((a, b) => b - a);
+
+        // Re-assign z-indices from the pool to the new order
+        const updatedPlaceholderElements = reordered.map((el, index) => ({
+          ...el,
+          zIndex: zIndexPool[index]
+        }));
+
+        // Merge back into main elements array
+        const otherElements = elements.filter(el => (el.placeholderId || 'unassigned') !== placeholderId);
+        onReorder([...otherElements, ...updatedPlaceholderElements]);
+      }
+    };
+
+    const activeElement = useMemo(() =>
+      activeId ? elements.find(el => el.id === activeId) : null
+      , [activeId, elements]);
 
     return (
       <div className="space-y-4">
@@ -6530,6 +6941,7 @@ const LayersPanel: React.FC<{
                               </p>
                               <p className="text-[10px] text-muted-foreground uppercase font-semibold">
                                 {placeholder.original.widthIn.toFixed(1)}" × {placeholder.original.heightIn.toFixed(1)}"
+                                {designUrl && ' • Design added'}
                               </p>
                             </div>
                           </div>
@@ -6646,69 +7058,65 @@ const LayersPanel: React.FC<{
                               </div>
                             );
                           })() : (
-                            // Desktop: keep existing multi-element list
-                            <>
-                              {elementsByPlaceholder[placeholder.id]
-                                ?.sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
-                                .map((element) => {
-                                  const isElementSelected = selectedIds.includes(element.id);
-                                  return (
-                                    <div key={element.id} className="space-y-2">
-                                      <div
-                                        className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${isElementSelected ? 'bg-primary/10 border-primary/20 border-2 shadow-sm' : 'bg-muted/30 border border-transparent shadow-none hover:bg-muted/50'}`}
-                                        onClick={() => onSelectElement(element.id)}
-                                      >
-                                        <div className="w-16 h-16 rounded-lg border bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
-                                          {element.type === 'image' && element.imageUrl ? (
-                                            <img
-                                              src={element.imageUrl}
-                                              alt="Thumbnail"
-                                              className="w-full h-full object-contain"
-                                              style={{ imageRendering: 'auto' }}
-                                            />
-                                          ) : element.type === 'text' ? (
-                                            <div className="flex flex-col items-center justify-center w-full h-full bg-white">
-                                              <span className="text-sm font-bold text-primary leading-none">T</span>
-                                              <div className="w-full h-[2px] bg-primary/20 mt-1" />
-                                            </div>
-                                          ) : (
-                                            <Square className="w-6 h-6 text-muted-foreground" />
-                                          )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-xs font-bold truncate">
-                                            {element.type === 'text' ? (element.text || 'Text') : (element.name || (element.type === 'image' ? 'Image' : element.shapeType || 'Shape'))}
-                                          </p>
-                                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
-                                            {element.width ? `${(element.width / (PX_PER_INCH || 96)).toFixed(1)}" × ${(element.height / (PX_PER_INCH || 96)).toFixed(1)}"` : 'Asset'}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-
-                              {/* Design Upload for Placeholder Section on Desktop when no elements */}
-                              {!elementsByPlaceholder[placeholder.id]?.length && (
-                                <div className="pt-2">
-                                  <PropertiesPanel
-                                    selectedPlaceholderId={placeholder.id}
-                                    placeholders={placeholders}
-                                    designUrlsByPlaceholder={designUrlsByPlaceholder}
-                                    onDesignUpload={onDesignUpload || (() => { })}
-                                    onDesignRemove={onDesignRemove}
-                                    displacementSettings={displacementSettings || { scaleX: 10, scaleY: 10, contrastBoost: 1.5 }}
-                                    onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
-                                    selectedElementIds={[]}
-                                    elements={elements}
-                                    onElementUpdate={() => { }}
-                                    onElementDelete={() => { }}
-                                    PX_PER_INCH={PX_PER_INCH}
-                                    canvasPadding={canvasPadding}
-                                  />
+                            // Desktop: keep existing multi-element list with reordering
+                            <DndContext
+                              sensors={sensors}
+                              collisionDetection={closestCenter}
+                              onDragStart={handleDragStart}
+                              onDragEnd={(e) => handleDragEnd(e, placeholder.id)}
+                              onDragCancel={() => setActiveId(null)}
+                            >
+                              <SortableContext
+                                items={(elementsByPlaceholder[placeholder.id] || [])
+                                  .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
+                                  .map(el => el.id)}
+                                strategy={verticalListSortingStrategy}
+                              >
+                                <div className="space-y-2">
+                                  {(elementsByPlaceholder[placeholder.id] || [])
+                                    .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
+                                    .map((element) => (
+                                      <SortableLayerItem
+                                        key={element.id}
+                                        element={element}
+                                        isSelected={selectedIds.includes(element.id)}
+                                        onSelect={onSelectElement}
+                                        onDelete={onDelete}
+                                        PX_PER_INCH={PX_PER_INCH || 96}
+                                      />
+                                    ))}
                                 </div>
-                              )}
-                            </>
+                              </SortableContext>
+                              <DragOverlay adjustScale={false}>
+                                {activeId && activeElement ? (
+                                  <LayerItemOverlay
+                                    element={activeElement}
+                                    PX_PER_INCH={PX_PER_INCH || 96}
+                                  />
+                                ) : null}
+                              </DragOverlay>
+                            </DndContext>
+                          )}
+
+                          {/* Design Upload for Placeholder Section on Desktop when no elements */}
+                          {!isMobile && !elementsByPlaceholder[placeholder.id]?.length && (
+                            <div className="pt-2">
+                              <PropertiesPanel
+                                selectedPlaceholderId={placeholder.id}
+                                placeholders={placeholders}
+                                designUrlsByPlaceholder={designUrlsByPlaceholder}
+                                onDesignUpload={onDesignUpload || (() => { })}
+                                onDesignRemove={onDesignRemove}
+                                displacementSettings={displacementSettings || { scaleX: 10, scaleY: 10, contrastBoost: 1.5 }}
+                                onDisplacementSettingsChange={onDisplacementSettingsChange || (() => { })}
+                                selectedElementIds={[]}
+                                elements={elements}
+                                onElementUpdate={() => { }}
+                                onElementDelete={() => { }}
+                                PX_PER_INCH={PX_PER_INCH}
+                                canvasPadding={canvasPadding}
+                              />
+                            </div>
                           )}
                         </div>
                       </AccordionContent>
