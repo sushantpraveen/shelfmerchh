@@ -1489,6 +1489,7 @@ const DesignEditor: React.FC = () => {
     const newLetterSpacing = updates.letterSpacing !== undefined ? updates.letterSpacing : element.letterSpacing || 0;
     const newRotation = updates.rotation !== undefined ? updates.rotation : element.rotation || 0;
     const newText = updates.text !== undefined ? updates.text : (element.text || '');
+    const newWidth = updates.width !== undefined ? updates.width : element.width;
 
     // Calculate bounds - use minimum for empty text
     let rotatedWidth: number;
@@ -1503,8 +1504,17 @@ const DesignEditor: React.FC = () => {
       ctx.font = `${newFontSize}px ${updates.fontFamily || element.fontFamily || 'Arial'}`;
       const metrics = ctx.measureText(newText);
       // Add letter spacing to width (approximate: letterSpacing * (charCount - 1))
-      const textWidth = metrics.width + (newLetterSpacing * Math.max(0, newText.length - 1));
-      const textHeight = newFontSize * 1.2;
+      const rawTextWidth = metrics.width + (newLetterSpacing * Math.max(0, newText.length - 1));
+
+      let textWidth = rawTextWidth;
+      let textHeight = newFontSize * 1.2;
+
+      // If the text string has a width constraint, we estimate word wrapping bounds
+      if (newWidth) {
+        textWidth = Math.min(rawTextWidth, newWidth);
+        const numLines = Math.max(1, Math.ceil(rawTextWidth / newWidth));
+        textHeight = newFontSize * 1.2 * numLines;
+      }
 
       // Account for rotation - calculate bounding box of rotated text
       const rad = (newRotation * Math.PI) / 180;
@@ -3872,105 +3882,6 @@ const DesignEditor: React.FC = () => {
                             return null;
                           })}
 
-                        {/* Text Editing Overlay */}
-                        {editingTextId && (() => {
-                          const el = elements.find(e => e.id === editingTextId);
-                          if (!el || el.type !== 'text') return null;
-                          return (
-                            <div
-                              style={{
-                                position: 'absolute',
-                                left: el.x,
-                                top: el.y - ((el.fontSize || 24) * 0.15),
-                                transform: `rotate(${el.rotation || 0}deg)`,
-                                transformOrigin: 'top left',
-                                zIndex: 1000,
-                              }}
-                            >
-                              <textarea
-                                value={el.text}
-
-                                onBlur={() => setEditingTextId(null)}
-                                autoFocus
-                                style={{
-                                  fontSize: `${el.fontSize || 24}px`,
-                                  fontFamily: el.fontFamily || 'Arial',
-                                  color: el.fill || '#000000',
-                                  background: 'transparent',
-                                  border: '1px dashed #9ca3af',
-                                  padding: 0,
-                                  margin: 0,
-                                  outline: 'none',
-                                  resize: 'none',
-                                  overflow: 'hidden',
-                                  whiteSpace: 'pre',
-                                  width: `${getTextWidth(el.text || '', el.fontSize || 24, el.fontFamily || 'Arial') + 20}px`,
-                                  height: `${(el.fontSize || 24) * 1.2}px`,
-                                  lineHeight: 1.2,
-                                }}
-                                ref={(ref) => {
-                                  if (ref) {
-                                    ref.style.width = '0px';
-                                    ref.style.width = (ref.scrollWidth + 10) + 'px';
-                                    ref.style.height = '0px';
-                                    ref.style.height = (ref.scrollHeight) + 'px';
-                                    if (document.activeElement !== ref) {
-                                      ref.focus();
-                                      ref.select();
-                                    }
-                                  }
-                                }}
-                                onInput={(e) => {
-                                  const target = e.target as HTMLTextAreaElement;
-                                  target.style.width = '0px';
-                                  target.style.width = (target.scrollWidth + 10) + 'px';
-                                  target.style.height = '0px';
-                                  target.style.height = (target.scrollHeight) + 'px';
-                                }}
-                                onChange={(e) => {
-                                  const newText = e.target.value;
-
-                                  // Validate if new text fits in print area
-                                  const placeholder = el.placeholderId
-                                    ? placeholders.find(p => p.id === el.placeholderId)
-                                    : undefined;
-
-                                  const checkArea = placeholder
-                                    ? { x: placeholder.x, y: placeholder.y, width: placeholder.width, height: placeholder.height }
-                                    : printArea;
-
-                                  if (checkArea) {
-                                    const fontSize = el.fontSize || 24;
-                                    const fontFamily = el.fontFamily || 'Arial';
-                                    const letterSpacing = el.letterSpacing || 0;
-                                    const textWidth = getTextWidth(newText, fontSize, fontFamily) + (letterSpacing * Math.max(0, newText.length - 1));
-                                    const textHeight = fontSize * 1.2;
-
-                                    const bounds = calculateRotatedBounds(el.x, el.y, textWidth, textHeight, el.rotation || 0);
-
-                                    // Allow if fully contained (with small tolerance)
-                                    const tolerance = 1;
-                                    const fitsX = bounds.minX >= checkArea.x - tolerance && bounds.maxX <= checkArea.x + checkArea.width + tolerance;
-                                    const fitsY = bounds.minY >= checkArea.y - tolerance && bounds.maxY <= checkArea.y + checkArea.height + tolerance;
-
-                                    // If text is shrinking, always allow
-                                    if (newText.length < (el.text || '').length) {
-                                      updateElement(el.id, { text: newText });
-                                      return;
-                                    }
-
-                                    if (!fitsX || !fitsY) {
-                                      return; // Block input
-                                    }
-                                  }
-
-                                  updateElement(el.id, { text: newText });
-                                }}
-                              />
-                            </div>
-                          );
-                        })()}
-
                         {/* X/Y axis guides and handles for active image (edit mode only) */}
                         {(!previewMode && selectedIds.length === 1) && (() => {
                           const sel = elements.find(e => e.id === selectedIds[0]);
@@ -4115,6 +4026,69 @@ const DesignEditor: React.FC = () => {
                         </Layer>
                       )}
                     </Stage>
+
+                    {/* Text Editing Overlay - Must be outside Stage (HTML elements can't be inside Konva) */}
+                    {editingTextId && (() => {
+                      const el = elements.find(e => e.id === editingTextId);
+                      if (!el || el.type !== 'text') return null;
+                      return (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: el.x,
+                            top: el.y - ((el.fontSize || 24) * 0.15),
+                            transform: `rotate(${el.rotation || 0}deg)`,
+                            transformOrigin: 'top left',
+                            zIndex: 1000,
+                          }}
+                        >
+                          <textarea
+                            value={el.text}
+                            onBlur={() => setEditingTextId(null)}
+                            autoFocus
+                            style={{
+                              fontSize: `${el.fontSize || 24}px`,
+                              fontFamily: el.fontFamily || 'Arial',
+                              color: el.fill || '#000000',
+                              background: 'transparent',
+                              border: '1px dashed #9ca3af',
+                              padding: 0,
+                              margin: 0,
+                              outline: 'none',
+                              resize: 'none',
+                              overflow: 'hidden',
+                              whiteSpace: 'pre',
+                              width: `${getTextWidth(el.text || '', el.fontSize || 24, el.fontFamily || 'Arial') + 20}px`,
+                              height: `${(el.fontSize || 24) * 1.2}px`,
+                              lineHeight: 1.2,
+                            }}
+                            ref={(ref) => {
+                              if (ref) {
+                                ref.style.width = '0px';
+                                ref.style.width = (ref.scrollWidth + 10) + 'px';
+                                ref.style.height = '0px';
+                                ref.style.height = (ref.scrollHeight) + 'px';
+                                if (document.activeElement !== ref) {
+                                  ref.focus();
+                                  ref.select();
+                                }
+                              }
+                            }}
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement;
+                              target.style.width = '0px';
+                              target.style.width = (target.scrollWidth + 10) + 'px';
+                              target.style.height = '0px';
+                              target.style.height = (target.scrollHeight) + 'px';
+                            }}
+                            onChange={(e) => {
+                              const newText = e.target.value;
+                              updateElement(el.id, { text: newText });
+                            }}
+                          />
+                        </div>
+                      );
+                    })()}
 
                     {/* Mobile Hand Tool Toggle */}
                     {isMobile && !previewMode && (
@@ -5496,573 +5470,307 @@ const PropertiesPanel: React.FC<{
 
       return (
         <div className="space-y-6">
+          {/* Text Input */}
+          <div>
+            <Label className="text-sm">Text</Label>
+            <Input
+              value={element.text || ''}
+              onChange={(e) => onUpdate({ text: e.target.value })}
+              placeholder="Enter text..."
+              className="mt-1"
+            />
+          </div>
+
           {element.type === 'text' && (
             <>
-              {/* Layers Section */}
-              <div className="space-y-3 border-t pt-4">
-                <Label className="text-sm font-semibold">Layers</Label>
-                <div className="p-3 border rounded-lg bg-background">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="w-12 h-12 rounded border bg-background flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
-                        <div className="flex flex-col items-center justify-center w-full h-full bg-white">
-                          <span className="text-sm font-bold text-primary leading-none">T</span>
-                          <div className="w-full h-[2px] bg-primary/20 mt-1" />
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{element.text || 'Text'}</p>
-                        <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-tight">
-                          {element.fontSize ? `${(element.fontSize / (PX_PER_INCH || 96)).toFixed(2)}" pt` : 'Text Layer'}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => {
-                        const elementId = selectedElementIds[0];
-                        if (elementId && onElementDelete) {
-                          onElementDelete(elementId);
-                        }
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
+
+
+
+              {/* Font Family */}
+              <div>
+                <Label className="text-sm">Font Family</Label>
+                <select
+                  value={element.fontFamily || 'Arial'}
+                  onChange={(e) => onUpdate({ fontFamily: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md bg-background text-sm mt-1"
+                >
+                  <option value="Arial">Arial</option>
+                  <option value="Helvetica">Helvetica</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="Courier New">Courier New</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Verdana">Verdana</option>
+                  <optgroup label="Google Fonts">
+                    {['ABeeZee', 'Abel', 'Abril Fatface', 'Acme', 'Aladin', 'Alex Brush', 'Anton', 'Bangers', 'Caveat', 'Cinzel', 'Comfortaa', 'Dancing Script', 'Great Vibes', 'Indie Flower', 'Lobster', 'Montserrat', 'Open Sans', 'Oswald', 'Pacifico', 'Playfair Display', 'Poppins', 'Raleway', 'Roboto', 'Rubik'].map(font => (
+                      <option key={font} value={font}>{font}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Font Size */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-sm">Font Size</Label>
+                  <span className="text-xs text-muted-foreground">{(element.fontSize || 24).toFixed(1)}</span>
                 </div>
+                <Slider
+                  value={[element.fontSize || 24]}
+                  onValueChange={([value]) => onUpdate({ fontSize: value })}
+                  min={8}
+                  max={500}
+                  step={1}
+                />
+              </div>
 
-                {/* Text Input */}
-                {/* <div>
-                  <Label className="text-sm">Text</Label>
-                  <Input
-                    value={element.text || ''}
-                    onChange={(e) => onUpdate({ text: e.target.value })}
-                    className="mt-1"
-                  />
-                </div> */}
+              {/* Bold and Italic */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={element.fontStyle?.includes('bold') ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    const currentStyle = element.fontStyle || '';
+                    const isBold = currentStyle.includes('bold');
+                    let newStyle = '';
+                    if (isBold) {
+                      // Remove bold, keep italic if present
+                      newStyle = currentStyle.replace(/\bbold\b/g, '').trim();
+                      if (currentStyle.includes('italic')) {
+                        newStyle = newStyle ? newStyle + ' italic' : 'italic';
+                      }
+                    } else {
+                      // Add bold, keep italic if present
+                      newStyle = currentStyle.includes('italic')
+                        ? 'bold italic'
+                        : 'bold';
+                    }
+                    onUpdate({ fontStyle: newStyle || undefined });
+                  }}
+                >
+                  <Bold className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant={element.fontStyle?.includes('italic') ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    const currentStyle = element.fontStyle || '';
+                    const isItalic = currentStyle.includes('italic');
+                    let newStyle = '';
+                    if (isItalic) {
+                      // Remove italic, keep bold if present
+                      newStyle = currentStyle.replace(/\bitalic\b/g, '').trim();
+                      if (currentStyle.includes('bold')) {
+                        newStyle = newStyle ? newStyle + ' bold' : 'bold';
+                      }
+                    } else {
+                      // Add italic, keep bold if present
+                      newStyle = currentStyle.includes('bold')
+                        ? 'bold italic'
+                        : 'italic';
+                    }
+                    onUpdate({ fontStyle: newStyle || undefined });
+                  }}
+                >
+                  <Italic className="w-4 h-4" />
+                </Button>
+              </div>
 
-                {/* Font Family */}
-                <div>
-                  <Label className="text-sm">Font Family</Label>
-                  <select
-                    value={element.fontFamily || 'Arial'}
-                    onChange={(e) => onUpdate({ fontFamily: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm mt-1"
-                  >
-                    <option value="Arial">Arial</option>
-                    <option value="Helvetica">Helvetica</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                    <option value="Courier New">Courier New</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Verdana">Verdana</option>
-                    <optgroup label="Google Fonts">
-                      {['ABeeZee', 'Abel', 'Abril Fatface', 'Acme', 'Aladin', 'Alex Brush', 'Anton', 'Bangers', 'Caveat', 'Cinzel', 'Comfortaa', 'Dancing Script', 'Great Vibes', 'Indie Flower', 'Lobster', 'Montserrat', 'Open Sans', 'Oswald', 'Pacifico', 'Playfair Display', 'Poppins', 'Raleway', 'Roboto', 'Rubik'].map(font => (
-                        <option key={font} value={font}>{font}</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </div>
-
-                {/* Font Size */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-sm">Font Size</Label>
-                    <span className="text-xs text-muted-foreground">{(element.fontSize || 24).toFixed(1)}</span>
-                  </div>
-                  <Slider
-                    value={[element.fontSize || 24]}
-                    onValueChange={([value]) => onUpdate({ fontSize: value })}
-                    min={8}
-                    max={500}
-                    step={1}
-                  />
-                </div>
-
-                {/* Bold and Italic */}
-                <div className="flex items-center gap-2">
+              {/* Indentation Controls */}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Indentation</Label>
+                <div className="flex items-center gap-1 ml-auto">
                   <Button
-                    variant={element.fontStyle?.includes('bold') ? 'default' : 'outline'}
+                    variant="outline"
                     size="sm"
                     onClick={() => {
-                      const currentStyle = element.fontStyle || '';
-                      const isBold = currentStyle.includes('bold');
-                      let newStyle = '';
-                      if (isBold) {
-                        // Remove bold, keep italic if present
-                        newStyle = currentStyle.replace(/\bbold\b/g, '').trim();
-                        if (currentStyle.includes('italic')) {
-                          newStyle = newStyle ? newStyle + ' italic' : 'italic';
-                        }
-                      } else {
-                        // Add bold, keep italic if present
-                        newStyle = currentStyle.includes('italic')
-                          ? 'bold italic'
-                          : 'bold';
-                      }
-                      onUpdate({ fontStyle: newStyle || undefined });
+                      // Shift text left (decrease x position)
+                      const currentX = element.x;
+                      const shiftAmount = (element.fontSize || 24) * 0.5; // Shift by half font size
+                      onUpdate({ x: currentX - shiftAmount });
                     }}
                   >
-                    <Bold className="w-4 h-4" />
+                    <ArrowLeft className="w-4 h-4" />
                   </Button>
                   <Button
-                    variant={element.fontStyle?.includes('italic') ? 'default' : 'outline'}
+                    variant="outline"
                     size="sm"
                     onClick={() => {
-                      const currentStyle = element.fontStyle || '';
-                      const isItalic = currentStyle.includes('italic');
-                      let newStyle = '';
-                      if (isItalic) {
-                        // Remove italic, keep bold if present
-                        newStyle = currentStyle.replace(/\bitalic\b/g, '').trim();
-                        if (currentStyle.includes('bold')) {
-                          newStyle = newStyle ? newStyle + ' bold' : 'bold';
-                        }
-                      } else {
-                        // Add italic, keep bold if present
-                        newStyle = currentStyle.includes('bold')
-                          ? 'bold italic'
-                          : 'italic';
-                      }
-                      onUpdate({ fontStyle: newStyle || undefined });
+                      // Shift text right (increase x position)
+                      const currentX = element.x;
+                      const shiftAmount = (element.fontSize || 24) * 0.5; // Shift by half font size
+                      onUpdate({ x: currentX + shiftAmount });
                     }}
                   >
-                    <Italic className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4" />
                   </Button>
-                </div>
-
-                {/* Indentation Controls */}
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm">Indentation</Label>
-                  <div className="flex items-center gap-1 ml-auto">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        // Shift text left (decrease x position)
-                        const currentX = element.x;
-                        const shiftAmount = (element.fontSize || 24) * 0.5; // Shift by half font size
-                        onUpdate({ x: currentX - shiftAmount });
-                      }}
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        // Shift text right (increase x position)
-                        const currentX = element.x;
-                        const shiftAmount = (element.fontSize || 24) * 0.5; // Shift by half font size
-                        onUpdate({ x: currentX + shiftAmount });
-                      }}
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Text Alignment */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant={element.align === 'left' ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => onUpdate({ align: 'left' })}
-                  >
-                    <AlignLeft className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant={element.align === 'center' || !element.align ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => onUpdate({ align: 'center' })}
-                  >
-                    <AlignCenter className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant={element.align === 'right' ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => onUpdate({ align: 'right' })}
-                  >
-                    <AlignRight className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                {/* Color */}
-                <div>
-                  <Label className="text-sm">Color</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      type="color"
-                      value={element.fill || '#000000'}
-                      onChange={(e) => onUpdate({ fill: e.target.value })}
-                      className="w-12 h-10 p-1"
-                    />
-                    <Input
-                      value={element.fill || '#000000'}
-                      onChange={(e) => onUpdate({ fill: e.target.value })}
-                      placeholder="#000000"
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
-
-                {/* Letter Spacing */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-sm">Letter Spacing</Label>
-                    <span className="text-xs text-muted-foreground">{element.letterSpacing || 0}</span>
-                  </div>
-                  <Slider
-                    value={[element.letterSpacing || 0]}
-                    onValueChange={([value]) => onUpdate({ letterSpacing: value })}
-                    min={-10}
-                    max={50}
-                    step={1}
-                  />
-                </div>
-
-                {/* Curved Text */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Curved text</Label>
-                    <Switch
-                      checked={element.curved || false}
-                      onCheckedChange={(checked) => {
-                        // When toggling curved on, don't set curveShape yet - wait for user to choose
-                        // When toggling off, clear both curved and curveShape
-                        if (checked) {
-                          onUpdate({
-                            curved: true,
-                            curveRadius: element.curveRadius || 200
-                            // Don't set curveShape - wait for user to select arch up/down/circle
-                          });
-                        } else {
-                          onUpdate({
-                            curved: false,
-                            curveShape: undefined,
-                            curveRadius: undefined
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-
-                  {element.curved && (
-                    <>
-                      {/* Curve Shape Options */}
-                      <div className="flex gap-2">
-                        <Button
-                          variant={element.curveShape === 'arch-down' || (!element.curveShape && element.curved) ? 'default' : 'outline'}
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => onUpdate({ curveShape: 'arch-down' })}
-                        >
-                          Arch Down
-                        </Button>
-                        <Button
-                          variant={element.curveShape === 'arch-up' ? 'default' : 'outline'}
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => onUpdate({ curveShape: 'arch-up' })}
-                        >
-                          Arch Up
-                        </Button>
-                        <Button
-                          variant={element.curveShape === 'circle' ? 'default' : 'outline'}
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => onUpdate({ curveShape: 'circle' })}
-                        >
-                          Circle
-                        </Button>
-                      </div>
-
-                      {/* Curve Percentage */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <Label className="text-sm">Curve</Label>
-                          <span className="text-xs text-muted-foreground">
-                            {Math.round(((element.curveRadius || 200) / 1000) * 100)}%
-                          </span>
-                        </div>
-                        <Slider
-                          value={[element.curveRadius || 200]}
-                          onValueChange={([value]) => onUpdate({ curveRadius: value })}
-                          min={50}
-                          max={1000}
-                          step={10}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Rotation */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-sm">Rotate</Label>
-                    <div className="flex items-center gap-1">
-                      <Input
-                        type="number"
-                        value={Math.round(element.rotation || 0)}
-                        onChange={(e) => onUpdate({ rotation: parseFloat(e.target.value) || 0 })}
-                        className="w-16 h-8 text-sm"
-                      />
-                      <span className="text-xs text-muted-foreground">deg</span>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[element.rotation || 0]}
-                    onValueChange={([value]) => onUpdate({ rotation: value })}
-                    min={-180}
-                    max={180}
-                    step={1}
-                  />
-                </div>
-
-                {/* Position */}
-                <div className="space-y-3 border-t pt-3">
-                  <Label className="text-sm">Position</Label>
-
-                  {/* Position Left */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label className="text-xs">Position left</Label>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => {
-                            const current = getPositionPercent(element, 'x');
-                            updatePositionPercent('x', Math.max(0, current - 0.1));
-                          }}
-                        >
-                          <ArrowLeft className="w-3 h-3" />
-                        </Button>
-                        <Input
-                          type="number"
-                          value={getPositionPercent(element, 'x').toFixed(2)}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            updatePositionPercent('x', value);
-                          }}
-                          className="w-20 h-7 text-xs text-center"
-                          step="0.1"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => {
-                            const current = getPositionPercent(element, 'x');
-                            updatePositionPercent('x', Math.min(100, current + 0.1));
-                          }}
-                        >
-                          <ArrowRight className="w-3 h-3" />
-                        </Button>
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Position Top */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label className="text-xs">Position top</Label>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => {
-                            const current = getPositionPercent(element, 'y');
-                            updatePositionPercent('y', Math.max(0, current - 0.1));
-                          }}
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                        </Button>
-                        <Input
-                          type="number"
-                          value={getPositionPercent(element, 'y').toFixed(2)}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            updatePositionPercent('y', value);
-                          }}
-                          className="w-20 h-7 text-xs text-center"
-                          step="0.1"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => {
-                            const current = getPositionPercent(element, 'y');
-                            updatePositionPercent('y', Math.min(100, current + 0.1));
-                          }}
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </Button>
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
-            </>
-          )}
 
-          {/* Graphics/Image/Shape Elements - Unified Controls */}
-          {(element.type === 'image' || element.type === 'shape') && (
-            <>
-              {/* Layers Section - hidden when the caller already shows the element row */}
-              {!hideElementRow && <div className="space-y-3 border-t pt-4">
-                <Label className="text-sm font-semibold">Layers</Label>
-                <div className="p-3 border rounded-lg bg-background">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="w-12 h-12 rounded border bg-background flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
-                        {element.type === 'image' && element.imageUrl ? (
-                          <img
-                            src={element.imageUrl}
-                            alt="Thumbnail"
-                            className="w-full h-full object-contain"
-                            style={{ imageRendering: 'auto' }}
-                          />
-                        ) : element.type === 'shape' ? (
-                          <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: element.fillColor || '#000' }}>
-                            {element.shapeType === 'circle' && <div className="w-8 h-8 rounded-full border border-white/40" />}
-                            {element.shapeType === 'rect' && <div className="w-8 h-8 border border-white/40" />}
-                          </div>
-                        ) : (
-                          <ImageIcon className="w-6 h-6 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {element.type === 'image' ? (element.name || 'Image') : (element.name || element.shapeType || 'Shape')}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-tight">
-                          {element.width ? `${(element.width / (PX_PER_INCH || 96)).toFixed(2)}" × ${(element.height / (PX_PER_INCH || 96)).toFixed(2)}"` : 'Asset'}
-                        </p>
-                      </div>
+              {/* Text Alignment */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={element.align === 'left' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => onUpdate({ align: 'left' })}
+                >
+                  <AlignLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant={element.align === 'center' || !element.align ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => onUpdate({ align: 'center' })}
+                >
+                  <AlignCenter className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant={element.align === 'right' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => onUpdate({ align: 'right' })}
+                >
+                  <AlignRight className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* Color */}
+              <div>
+                <Label className="text-sm">Color</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    type="color"
+                    value={element.fill || '#000000'}
+                    onChange={(e) => onUpdate({ fill: e.target.value })}
+                    className="w-12 h-10 p-1"
+                  />
+                  <Input
+                    value={element.fill || '#000000'}
+                    onChange={(e) => onUpdate({ fill: e.target.value })}
+                    placeholder="#000000"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+
+              {/* Letter Spacing */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-sm">Letter Spacing</Label>
+                  <span className="text-xs text-muted-foreground">{element.letterSpacing || 0}</span>
+                </div>
+                <Slider
+                  value={[element.letterSpacing || 0]}
+                  onValueChange={([value]) => onUpdate({ letterSpacing: value })}
+                  min={-10}
+                  max={50}
+                  step={1}
+                />
+              </div>
+
+              {/* Curved Text */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Curved text</Label>
+                  <Switch
+                    checked={element.curved || false}
+                    onCheckedChange={(checked) => {
+                      // When toggling curved on, don't set curveShape yet - wait for user to choose
+                      // When toggling off, clear both curved and curveShape
+                      if (checked) {
+                        onUpdate({
+                          curved: true,
+                          curveRadius: element.curveRadius || 200
+                          // Don't set curveShape - wait for user to select arch up/down/circle
+                        });
+                      } else {
+                        onUpdate({
+                          curved: false,
+                          curveShape: undefined,
+                          curveRadius: undefined
+                        });
+                      }
+                    }}
+                  />
+                </div>
+
+                {element.curved && (
+                  <>
+                    {/* Curve Shape Options */}
+                    <div className="flex gap-2">
+                      <Button
+                        variant={element.curveShape === 'arch-down' || (!element.curveShape && element.curved) ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => onUpdate({ curveShape: 'arch-down' })}
+                      >
+                        Arch Down
+                      </Button>
+                      <Button
+                        variant={element.curveShape === 'arch-up' ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => onUpdate({ curveShape: 'arch-up' })}
+                      >
+                        Arch Up
+                      </Button>
+                      <Button
+                        variant={element.curveShape === 'circle' ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => onUpdate({ curveShape: 'circle' })}
+                      >
+                        Circle
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => {
-                        const elementId = selectedElementIds[0];
-                        if (elementId && onElementDelete) {
-                          onElementDelete(elementId);
-                        }
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-              </div>}
 
-              {/* Transform Controls - Grid Layout */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Width */}
-                <div>
-                  <Label className="text-sm">Width</Label>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Input
-                      type="number"
-                      value={element.width ? (element.width / PX_PER_INCH).toFixed(2) : '0'}
-                      onChange={(e) => {
-                        const inches = parseFloat(e.target.value) || 0;
-                        const pixels = inches * PX_PER_INCH;
-                        if (element.lockAspectRatio && element.width && element.height) {
-                          const aspectRatio = element.width / element.height;
-                          onUpdate({ width: pixels, height: pixels / aspectRatio });
-                        } else {
-                          onUpdate({ width: pixels });
-                        }
-                      }}
-                      className="w-full h-8 text-sm"
-                      step="0.01"
-                    />
-                    <span className="text-xs text-muted-foreground">in</span>
-                  </div>
-                </div>
+                    {/* Curve Percentage */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <Label className="text-sm">Curve</Label>
+                        <span className="text-xs text-muted-foreground">
+                          {Math.round(((element.curveRadius || 200) / 1000) * 100)}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={[element.curveRadius || 200]}
+                        onValueChange={([value]) => onUpdate({ curveRadius: value })}
+                        min={50}
+                        max={1000}
+                        step={10}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
 
-                {/* Height */}
-                <div>
-                  <Label className="text-sm">Height</Label>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Input
-                      type="number"
-                      value={element.height ? (element.height / PX_PER_INCH).toFixed(2) : '0'}
-                      onChange={(e) => {
-                        const inches = parseFloat(e.target.value) || 0;
-                        const pixels = inches * PX_PER_INCH;
-                        if (element.lockAspectRatio && element.width && element.height) {
-                          const aspectRatio = element.width / element.height;
-                          onUpdate({ height: pixels, width: pixels * aspectRatio });
-                        } else {
-                          onUpdate({ height: pixels });
-                        }
-                      }}
-                      className="w-full h-8 text-sm"
-                      step="0.01"
-                    />
-                    <span className="text-xs text-muted-foreground">in</span>
-                  </div>
-                </div>
-
-                {/* Rotate */}
-                <div>
+              {/* Rotation */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
                   <Label className="text-sm">Rotate</Label>
-                  <div className="flex items-center gap-1 mt-1">
+                  <div className="flex items-center gap-1">
                     <Input
                       type="number"
                       value={Math.round(element.rotation || 0)}
                       onChange={(e) => onUpdate({ rotation: parseFloat(e.target.value) || 0 })}
-                      className="w-full h-8 text-sm"
-                      step="1"
+                      className="w-16 h-8 text-sm"
                     />
                     <span className="text-xs text-muted-foreground">deg</span>
                   </div>
                 </div>
-
-                {/* Scale */}
-                <div>
-                  <Label className="text-sm">Scale</Label>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Input
-                      type="number"
-                      value={element.scaleX ? Math.round(element.scaleX * 100 * 100) / 100 : '100'}
-                      onChange={(e) => {
-                        const scale = parseFloat(e.target.value) || 100;
-                        const scaleValue = scale / 100;
-                        // Update scale while preserving current dimensions
-                        const currentWidth = element.width || 100;
-                        const currentHeight = element.height || 100;
-                        onUpdate({
-                          scaleX: scaleValue,
-                          scaleY: scaleValue,
-                          width: currentWidth * scaleValue,
-                          height: currentHeight * scaleValue
-                        });
-                      }}
-                      className="w-full h-8 text-sm"
-                      step="0.01"
-                    />
-                    <span className="text-xs text-muted-foreground">%</span>
-                  </div>
-                </div>
+                <Slider
+                  value={[element.rotation || 0]}
+                  onValueChange={([value]) => onUpdate({ rotation: value })}
+                  min={-180}
+                  max={180}
+                  step={1}
+                />
               </div>
 
-              {/* Position Controls */}
+              {/* Position */}
               <div className="space-y-3 border-t pt-3">
+                <Label className="text-sm">Position</Label>
+
                 {/* Position Left */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -6073,39 +5781,18 @@ const PropertiesPanel: React.FC<{
                         size="icon"
                         className="h-6 w-6"
                         onClick={() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder) {
-                            const current = ((element.x - placeholder.x) / placeholder.width) * 100;
-                            const newPercent = Math.max(0, current - 0.1);
-                            const newValue = placeholder.x + (placeholder.width * newPercent / 100);
-                            onUpdate({ x: newValue });
-                          }
+                          const current = getPositionPercent(element, 'x');
+                          updatePositionPercent('x', Math.max(0, current - 0.1));
                         }}
                       >
                         <ArrowLeft className="w-3 h-3" />
                       </Button>
                       <Input
                         type="number"
-                        value={(() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder) {
-                            return (((element.x - placeholder.x) / placeholder.width) * 100).toFixed(2);
-                          }
-                          return '0';
-                        })()}
+                        value={getPositionPercent(element, 'x').toFixed(2)}
                         onChange={(e) => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder) {
-                            const percent = parseFloat(e.target.value) || 0;
-                            const newValue = placeholder.x + (placeholder.width * percent / 100);
-                            onUpdate({ x: newValue });
-                          }
+                          const value = parseFloat(e.target.value) || 0;
+                          updatePositionPercent('x', value);
                         }}
                         className="w-20 h-7 text-xs text-center"
                         step="0.1"
@@ -6115,15 +5802,8 @@ const PropertiesPanel: React.FC<{
                         size="icon"
                         className="h-6 w-6"
                         onClick={() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder) {
-                            const current = ((element.x - placeholder.x) / placeholder.width) * 100;
-                            const newPercent = Math.min(100, current + 0.1);
-                            const newValue = placeholder.x + (placeholder.width * newPercent / 100);
-                            onUpdate({ x: newValue });
-                          }
+                          const current = getPositionPercent(element, 'x');
+                          updatePositionPercent('x', Math.min(100, current + 0.1));
                         }}
                       >
                         <ArrowRight className="w-3 h-3" />
@@ -6143,39 +5823,18 @@ const PropertiesPanel: React.FC<{
                         size="icon"
                         className="h-6 w-6"
                         onClick={() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder) {
-                            const current = ((element.y - placeholder.y) / placeholder.height) * 100;
-                            const newPercent = Math.max(0, current - 0.1);
-                            const newValue = placeholder.y + (placeholder.height * newPercent / 100);
-                            onUpdate({ y: newValue });
-                          }
+                          const current = getPositionPercent(element, 'y');
+                          updatePositionPercent('y', Math.max(0, current - 0.1));
                         }}
                       >
                         <ArrowUp className="w-3 h-3" />
                       </Button>
                       <Input
                         type="number"
-                        value={(() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder) {
-                            return (((element.y - placeholder.y) / placeholder.height) * 100).toFixed(2);
-                          }
-                          return '0';
-                        })()}
+                        value={getPositionPercent(element, 'y').toFixed(2)}
                         onChange={(e) => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder) {
-                            const percent = parseFloat(e.target.value) || 0;
-                            const newValue = placeholder.y + (placeholder.height * percent / 100);
-                            onUpdate({ y: newValue });
-                          }
+                          const value = parseFloat(e.target.value) || 0;
+                          updatePositionPercent('y', value);
                         }}
                         className="w-20 h-7 text-xs text-center"
                         step="0.1"
@@ -6185,15 +5844,8 @@ const PropertiesPanel: React.FC<{
                         size="icon"
                         className="h-6 w-6"
                         onClick={() => {
-                          const placeholder = element.placeholderId
-                            ? placeholders.find(p => p.id === element.placeholderId)
-                            : null;
-                          if (placeholder) {
-                            const current = ((element.y - placeholder.y) / placeholder.height) * 100;
-                            const newPercent = Math.min(100, current + 0.1);
-                            const newValue = placeholder.y + (placeholder.height * newPercent / 100);
-                            onUpdate({ y: newValue });
-                          }
+                          const current = getPositionPercent(element, 'y');
+                          updatePositionPercent('y', Math.min(100, current + 0.1));
                         }}
                       >
                         <ArrowDown className="w-3 h-3" />
@@ -6202,112 +5854,405 @@ const PropertiesPanel: React.FC<{
                     </div>
                   </div>
                 </div>
-
-                {/* Alignment Buttons */}
-                <div className="space-y-2 pt-2">
-                  {/* Horizontal Alignment */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        const placeholder = element.placeholderId
-                          ? placeholders.find(p => p.id === element.placeholderId)
-                          : null;
-                        if (placeholder && element.width) {
-                          onUpdate({ x: placeholder.x });
-                        }
-                      }}
-                    >
-                      <AlignLeft className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        const placeholder = element.placeholderId
-                          ? placeholders.find(p => p.id === element.placeholderId)
-                          : null;
-                        if (placeholder && element.width) {
-                          onUpdate({ x: placeholder.x + (placeholder.width / 2) - (element.width / 2) });
-                        }
-                      }}
-                    >
-                      <AlignCenter className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        const placeholder = element.placeholderId
-                          ? placeholders.find(p => p.id === element.placeholderId)
-                          : null;
-                        if (placeholder && element.width) {
-                          onUpdate({ x: placeholder.x + placeholder.width - element.width });
-                        }
-                      }}
-                    >
-                      <AlignRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  {/* Vertical Alignment */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        const placeholder = element.placeholderId
-                          ? placeholders.find(p => p.id === element.placeholderId)
-                          : null;
-                        if (placeholder) {
-                          onUpdate({ y: placeholder.y });
-                        }
-                      }}
-                    >
-                      <ArrowUp className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        const placeholder = element.placeholderId
-                          ? placeholders.find(p => p.id === element.placeholderId)
-                          : null;
-                        if (placeholder && element.height) {
-                          onUpdate({ y: placeholder.y + (placeholder.height / 2) - (element.height / 2) });
-                        }
-                      }}
-                    >
-                      <ArrowUp className="w-4 h-4" />
-                      <ArrowDown className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        const placeholder = element.placeholderId
-                          ? placeholders.find(p => p.id === element.placeholderId)
-                          : null;
-                        if (placeholder && element.height) {
-                          onUpdate({ y: placeholder.y + placeholder.height - element.height });
-                        }
-                      }}
-                    >
-                      <ArrowDown className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
               </div>
 
             </>
           )
+          }
+
+          {/* Graphics/Image/Shape Elements - Unified Controls */}
+          {
+            (element.type === 'image' || element.type === 'shape') && (
+              <>
+                {/* Layers Section - hidden when the caller already shows the element row */}
+                {!hideElementRow && <div className="space-y-3 border-t pt-4">
+                  <Label className="text-sm font-semibold">Layers</Label>
+                  <div className="p-3 border rounded-lg bg-background">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="w-12 h-12 rounded border bg-background flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                          {element.type === 'image' && element.imageUrl ? (
+                            <img
+                              src={element.imageUrl}
+                              alt="Thumbnail"
+                              className="w-full h-full object-contain"
+                              style={{ imageRendering: 'auto' }}
+                            />
+                          ) : element.type === 'shape' ? (
+                            <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: element.fillColor || '#000' }}>
+                              {element.shapeType === 'circle' && <div className="w-8 h-8 rounded-full border border-white/40" />}
+                              {element.shapeType === 'rect' && <div className="w-8 h-8 border border-white/40" />}
+                            </div>
+                          ) : (
+                            <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {element.type === 'image' ? (element.name || 'Image') : (element.name || element.shapeType || 'Shape')}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-tight">
+                            {element.width ? `${(element.width / (PX_PER_INCH || 96)).toFixed(2)}" × ${(element.height / (PX_PER_INCH || 96)).toFixed(2)}"` : 'Asset'}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          const elementId = selectedElementIds[0];
+                          if (elementId && onElementDelete) {
+                            onElementDelete(elementId);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>}
+
+                {/* Transform Controls - Grid Layout */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Width */}
+                  <div>
+                    <Label className="text-sm">Width</Label>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Input
+                        type="number"
+                        value={element.width ? (element.width / PX_PER_INCH).toFixed(2) : '0'}
+                        onChange={(e) => {
+                          const inches = parseFloat(e.target.value) || 0;
+                          const pixels = inches * PX_PER_INCH;
+                          if (element.lockAspectRatio && element.width && element.height) {
+                            const aspectRatio = element.width / element.height;
+                            onUpdate({ width: pixels, height: pixels / aspectRatio });
+                          } else {
+                            onUpdate({ width: pixels });
+                          }
+                        }}
+                        className="w-full h-8 text-sm"
+                        step="0.01"
+                      />
+                      <span className="text-xs text-muted-foreground">in</span>
+                    </div>
+                  </div>
+
+                  {/* Height */}
+                  <div>
+                    <Label className="text-sm">Height</Label>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Input
+                        type="number"
+                        value={element.height ? (element.height / PX_PER_INCH).toFixed(2) : '0'}
+                        onChange={(e) => {
+                          const inches = parseFloat(e.target.value) || 0;
+                          const pixels = inches * PX_PER_INCH;
+                          if (element.lockAspectRatio && element.width && element.height) {
+                            const aspectRatio = element.width / element.height;
+                            onUpdate({ height: pixels, width: pixels * aspectRatio });
+                          } else {
+                            onUpdate({ height: pixels });
+                          }
+                        }}
+                        className="w-full h-8 text-sm"
+                        step="0.01"
+                      />
+                      <span className="text-xs text-muted-foreground">in</span>
+                    </div>
+                  </div>
+
+                  {/* Rotate */}
+                  <div>
+                    <Label className="text-sm">Rotate</Label>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Input
+                        type="number"
+                        value={Math.round(element.rotation || 0)}
+                        onChange={(e) => onUpdate({ rotation: parseFloat(e.target.value) || 0 })}
+                        className="w-full h-8 text-sm"
+                        step="1"
+                      />
+                      <span className="text-xs text-muted-foreground">deg</span>
+                    </div>
+                  </div>
+
+                  {/* Scale */}
+                  <div>
+                    <Label className="text-sm">Scale</Label>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Input
+                        type="number"
+                        value={element.scaleX ? Math.round(element.scaleX * 100 * 100) / 100 : '100'}
+                        onChange={(e) => {
+                          const scale = parseFloat(e.target.value) || 100;
+                          const scaleValue = scale / 100;
+                          // Update scale while preserving current dimensions
+                          const currentWidth = element.width || 100;
+                          const currentHeight = element.height || 100;
+                          onUpdate({
+                            scaleX: scaleValue,
+                            scaleY: scaleValue,
+                            width: currentWidth * scaleValue,
+                            height: currentHeight * scaleValue
+                          });
+                        }}
+                        className="w-full h-8 text-sm"
+                        step="0.01"
+                      />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Position Controls */}
+                <div className="space-y-3 border-t pt-3">
+                  {/* Position Left */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs">Position left</Label>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => {
+                            const placeholder = element.placeholderId
+                              ? placeholders.find(p => p.id === element.placeholderId)
+                              : null;
+                            if (placeholder) {
+                              const current = ((element.x - placeholder.x) / placeholder.width) * 100;
+                              const newPercent = Math.max(0, current - 0.1);
+                              const newValue = placeholder.x + (placeholder.width * newPercent / 100);
+                              onUpdate({ x: newValue });
+                            }
+                          }}
+                        >
+                          <ArrowLeft className="w-3 h-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          value={(() => {
+                            const placeholder = element.placeholderId
+                              ? placeholders.find(p => p.id === element.placeholderId)
+                              : null;
+                            if (placeholder) {
+                              return (((element.x - placeholder.x) / placeholder.width) * 100).toFixed(2);
+                            }
+                            return '0';
+                          })()}
+                          onChange={(e) => {
+                            const placeholder = element.placeholderId
+                              ? placeholders.find(p => p.id === element.placeholderId)
+                              : null;
+                            if (placeholder) {
+                              const percent = parseFloat(e.target.value) || 0;
+                              const newValue = placeholder.x + (placeholder.width * percent / 100);
+                              onUpdate({ x: newValue });
+                            }
+                          }}
+                          className="w-20 h-7 text-xs text-center"
+                          step="0.1"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => {
+                            const placeholder = element.placeholderId
+                              ? placeholders.find(p => p.id === element.placeholderId)
+                              : null;
+                            if (placeholder) {
+                              const current = ((element.x - placeholder.x) / placeholder.width) * 100;
+                              const newPercent = Math.min(100, current + 0.1);
+                              const newValue = placeholder.x + (placeholder.width * newPercent / 100);
+                              onUpdate({ x: newValue });
+                            }
+                          }}
+                        >
+                          <ArrowRight className="w-3 h-3" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Position Top */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs">Position top</Label>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => {
+                            const placeholder = element.placeholderId
+                              ? placeholders.find(p => p.id === element.placeholderId)
+                              : null;
+                            if (placeholder) {
+                              const current = ((element.y - placeholder.y) / placeholder.height) * 100;
+                              const newPercent = Math.max(0, current - 0.1);
+                              const newValue = placeholder.y + (placeholder.height * newPercent / 100);
+                              onUpdate({ y: newValue });
+                            }
+                          }}
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          value={(() => {
+                            const placeholder = element.placeholderId
+                              ? placeholders.find(p => p.id === element.placeholderId)
+                              : null;
+                            if (placeholder) {
+                              return (((element.y - placeholder.y) / placeholder.height) * 100).toFixed(2);
+                            }
+                            return '0';
+                          })()}
+                          onChange={(e) => {
+                            const placeholder = element.placeholderId
+                              ? placeholders.find(p => p.id === element.placeholderId)
+                              : null;
+                            if (placeholder) {
+                              const percent = parseFloat(e.target.value) || 0;
+                              const newValue = placeholder.y + (placeholder.height * percent / 100);
+                              onUpdate({ y: newValue });
+                            }
+                          }}
+                          className="w-20 h-7 text-xs text-center"
+                          step="0.1"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => {
+                            const placeholder = element.placeholderId
+                              ? placeholders.find(p => p.id === element.placeholderId)
+                              : null;
+                            if (placeholder) {
+                              const current = ((element.y - placeholder.y) / placeholder.height) * 100;
+                              const newPercent = Math.min(100, current + 0.1);
+                              const newValue = placeholder.y + (placeholder.height * newPercent / 100);
+                              onUpdate({ y: newValue });
+                            }
+                          }}
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Alignment Buttons */}
+                  <div className="space-y-2 pt-2">
+                    {/* Horizontal Alignment */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder && element.width) {
+                            onUpdate({ x: placeholder.x });
+                          }
+                        }}
+                      >
+                        <AlignLeft className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder && element.width) {
+                            onUpdate({ x: placeholder.x + (placeholder.width / 2) - (element.width / 2) });
+                          }
+                        }}
+                      >
+                        <AlignCenter className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder && element.width) {
+                            onUpdate({ x: placeholder.x + placeholder.width - element.width });
+                          }
+                        }}
+                      >
+                        <AlignRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+
+                    {/* Vertical Alignment */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder) {
+                            onUpdate({ y: placeholder.y });
+                          }
+                        }}
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder && element.height) {
+                            onUpdate({ y: placeholder.y + (placeholder.height / 2) - (element.height / 2) });
+                          }
+                        }}
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                        <ArrowDown className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          const placeholder = element.placeholderId
+                            ? placeholders.find(p => p.id === element.placeholderId)
+                            : null;
+                          if (placeholder && element.height) {
+                            onUpdate({ y: placeholder.y + placeholder.height - element.height });
+                          }
+                        }}
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+              </>
+            )
           }
         </div >
       );

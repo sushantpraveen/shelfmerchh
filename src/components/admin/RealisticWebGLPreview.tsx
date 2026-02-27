@@ -1005,7 +1005,7 @@ export const RealisticWebGLPreview: React.FC<RealisticWebGLPreviewProps> = ({
         const hasGarmentBackground = !!sceneRef.current.garmentSprite;
         const safeBlendMode = getSafeBlendMode(garmentTintHex, hasGarmentBackground);
         designSprite.blendMode = safeBlendMode as any;
-        designSprite.alpha = hasGarmentBackground ? REALISM_ALPHA : 1.0; // Full alpha if no background
+        designSprite.alpha = hasGarmentBackground ? REALISM_ALPHA : 0.92; // Full alpha if no background
 
         // Build mask matching placeholder shape.
         const mask = new Graphics();
