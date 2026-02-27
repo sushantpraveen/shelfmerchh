@@ -75,6 +75,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(cookieParser(process.env.COOKIE_SECRET || process.env.JWT_SECRET)); 
 // Security middleware (after CORS)
+app.use((req, res, next) => {
+  // Explicitly remove X-Frame-Options to allow embedding (Shopify uses CSP frame-ancestors)
+  res.removeHeader('X-Frame-Options');
+  next();
+});
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
