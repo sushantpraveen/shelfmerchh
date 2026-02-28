@@ -6,8 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import createApp from '@shopify/app-bridge';
-import { Redirect } from '@shopify/app-bridge/actions';
 
 /**
  * ShopifyApp Component (Embedded Page)
@@ -47,46 +45,17 @@ const ShopifyApp: React.FC = () => {
                 console.log('[ShopifyApp] status:', status);
 
                 if (!status.installed) {
-                    // Not installed → redirect to OAuth (must be top-level for Shopify)
+                    // Not installed → redirect to OAuth (top-level, break out of iframe)
                     console.log('[ShopifyApp] Not installed, redirecting to OAuth');
                     if (status.authUrl) {
-                        const host = searchParams.get('host');
-                        const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY;
-                        const isEmbedded = searchParams.get('embedded') === '1' || !!host;
-                        
-                        console.log('[ShopifyApp] Redirect context:', { isEmbedded, hasHost: !!host, hasApiKey: !!apiKey });
-                        
-                        if (isEmbedded && host && apiKey) {
-                            // Use App Bridge Redirect for embedded context
-                            try {
-                                const app = createApp({
-                                    apiKey: apiKey,
-                                    host: host,
-                                    forceRedirect: true,
-                                });
-                                const redirect = Redirect.create(app);
-                                redirect.dispatch(Redirect.Action.REMOTE, status.authUrl);
-                                console.log('[ShopifyApp] App Bridge redirect dispatched');
-                            } catch (err) {
-                                console.error('[ShopifyApp] App Bridge redirect failed:', err);
-                                // Fallback: Use window.top for top-level redirect
-                                if (window.top && window.top !== window.self) {
-                                    window.top.location.href = status.authUrl;
-                                } else {
-                                    window.location.assign(status.authUrl);
-                                }
-                            }
+                        // Always use top-level redirect for OAuth
+                        if (window.top) {
+                            window.top.location.href = status.authUrl;
                         } else {
-                            // Not embedded OR missing apiKey → use window.top fallback
-                            console.log('[ShopifyApp] Using window.top fallback');
-                            if (window.top && window.top !== window.self) {
-                                window.top.location.href = status.authUrl;
-                            } else {
-                                window.location.assign(status.authUrl);
-                            }
+                            window.location.href = status.authUrl;
                         }
                     }
-                    return; // Don't update state, page will navigate away
+                    return;
                 }
 
                 setInstalled(true);
