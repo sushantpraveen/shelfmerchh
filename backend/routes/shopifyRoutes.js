@@ -200,11 +200,12 @@ router.get('/callback', async (req, res) => {
     res.clearCookie('shopify_state', { path: '/', signed: true });
     res.clearCookie('merchant_id', { path: '/', signed: true });
 
-    // Redirect to Embedded App Page, preserving host if available
-    const appBase = (process.env.APP_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:8080').replace(/\/$/, '');
-    let redirectUrl = `${appBase}/shopify/app?shop=${sanitizedShop}`;
-    if (host) redirectUrl += `&host=${encodeURIComponent(host)}`;
-    res.redirect(redirectUrl);
+    // Redirect to Shopify Admin embedded app URL
+    const shopHandle = sanitizedShop.replace('.myshopify.com', '');
+    const appSlug = process.env.SHOPIFY_APP_SLUG;
+    const adminRedirectUrl = `https://admin.shopify.com/store/${shopHandle}/apps/${appSlug}`;
+    
+    return res.redirect(adminRedirectUrl);
 
   } catch (error) {
     console.error(`[Shopify Callback Error] ${sanitizedShop}:`, error.response?.data || error.message);
