@@ -74,10 +74,9 @@ const StoreAuthPage = () => {
 
     useEffect(() => {
         if (isAuthenticated && store) {
-            const redirectUrl = buildStorePath('/', store.subdomain);
-            navigate(redirectUrl, { state: location.state });
+            window.location.href = 'https://store.shelfmerch.com';
         }
-    }, [isAuthenticated, store, navigate, location.state]);
+    }, [isAuthenticated, store]);
 
     useEffect(() => {
         let interval: NodeJS.Timeout;
@@ -164,8 +163,7 @@ const StoreAuthPage = () => {
                 } else {
                     toast.success('Account created!');
                 }
-                const redirectUrl = buildStorePath('/', subdomain);
-                navigate(redirectUrl, { state: location.state });
+                window.location.href = 'https://store.shelfmerch.com';
             }
         } catch (err) {
             toast.error('Verification failed');
