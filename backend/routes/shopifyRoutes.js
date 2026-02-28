@@ -163,12 +163,33 @@ router.get('/callback', async (req, res) => {
 
     const { access_token, scope } = tokenResponse.data;
 
+    // --- SCOPES FIX (safe, no flow changes) ---
+    let grantedScopes = [];
+    try {
+      const scopesResp = await axios.get(
+        `https://${sanitizedShop}/admin/oauth/access_scopes.json`,
+        { headers: { 'X-Shopify-Access-Token': access_token } }
+      );
+      grantedScopes = (scopesResp.data?.access_scopes || [])
+        .map(s => s.handle)
+        .filter(Boolean);
+      console.log('[Shopify Callback] Granted scopes:', grantedScopes);
+    } catch (e) {
+      console.warn(
+        '[Shopify Callback] Could not fetch access_scopes.json, falling back to token scope:',
+        e.response?.data || e.message
+      );
+    }
+
     // UPSERT by shop ONLY (one record per shop)
     const updateData = {
       merchantId: null, // ensure not linked after install
       accessToken: access_token,
-      scope: scope,
-      scopes: scope ? scope.split(',') : [],
+      // Prefer canonical granted scopes from Shopify, fallback to tokenResponse scope
+      scope: (grantedScopes.length ? grantedScopes.join(',') : scope) || '',
+      scopes: grantedScopes.length
+        ? grantedScopes
+        : (scope ? scope.split(',').map(s => s.trim()).filter(Boolean) : []),
       isActive: true,
       installedAt: new Date(),
       uninstalledAt: null
