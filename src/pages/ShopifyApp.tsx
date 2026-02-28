@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import createApp from '@shopify/app-bridge';
-<<<<<<< Updated upstream
+
 import { Redirect } from '@shopify/app-bridge/actions';
-=======
->>>>>>> Stashed changes
+
+
 
 /**
  * ShopifyApp Component (Embedded Page)
