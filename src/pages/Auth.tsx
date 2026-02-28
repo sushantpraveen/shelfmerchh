@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,8 +11,8 @@ import logo from '@/assets/logo.webp';
 import googleLogo from '@/assets/google-logo-new.png';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { RAW_API_URL } from '@/config';
-import { useEffect } from 'react';
 import { getSafeRedirect } from '@/utils/authUtils';
+import createApp from '@shopify/app-bridge';
 
 type AuthStep =
   | 'IDENTIFIER'
@@ -49,9 +49,24 @@ const consumeReturnTo = (): string => {
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { login, loginWithOtp, signupComplete, refreshUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [embedded, setEmbedded] = useState(false);
+
+  // Embedded failsafe: auto-re-embed if opened outside Shopify Admin
+  useEffect(() => {
+    const host = searchParams.get('host');
+    const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY;
+
+    if (host && apiKey) {
+      createApp({
+        apiKey,
+        host,
+        forceRedirect: true,
+      });
+    }
+  }, [searchParams]);
 
   // Capture returnTo on mount and detect embedded context from it
   useEffect(() => {

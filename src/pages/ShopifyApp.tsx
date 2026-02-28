@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import createApp from '@shopify/app-bridge';
+<<<<<<< Updated upstream
 import { Redirect } from '@shopify/app-bridge/actions';
+=======
+>>>>>>> Stashed changes
 
 /**
  * ShopifyApp Component (Embedded Page)
@@ -26,6 +29,20 @@ const ShopifyApp: React.FC = () => {
     const location = useLocation();
 
     const shop = searchParams.get('shop');
+
+    // Embedded failsafe: auto-re-embed if opened outside Shopify Admin
+    useEffect(() => {
+        const host = searchParams.get('host');
+        const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY;
+
+        if (host && apiKey) {
+            createApp({
+                apiKey,
+                host,
+                forceRedirect: true,
+            });
+        }
+    }, [searchParams]);
 
     // Status states
     const [statusLoading, setStatusLoading] = useState(true);
@@ -162,9 +179,18 @@ const ShopifyApp: React.FC = () => {
         // Step 2: Installed but no user → show login/signup
         if (!user) {
             const host = searchParams.get('host');
-            let returnPath = `/shopify/app?shop=${encodeURIComponent(shop)}`;
-            if (host) returnPath += `&host=${encodeURIComponent(host)}`;
-            const returnUrl = encodeURIComponent(returnPath);
+            const embedded = searchParams.get('embedded') || '1';
+
+            let returnPath = `/shopify/app?shop=${encodeURIComponent(shop)}&embedded=${embedded}`;
+            if (host) {
+                returnPath += `&host=${encodeURIComponent(host)}`;
+            }
+
+            const returnTo = encodeURIComponent(returnPath);
+
+            const authBase = `/auth?embedded=${embedded}${
+                host ? `&host=${encodeURIComponent(host)}` : ''
+            }`;
 
             return (
                 <Card className="w-full max-w-md">
@@ -175,14 +201,14 @@ const ShopifyApp: React.FC = () => {
                     <CardContent className="flex flex-col gap-4">
                         <Button
                             className="w-full"
-                            onClick={() => navigate(`/auth?mode=login&returnTo=${returnUrl}`)}
+                            onClick={() => navigate(`${authBase}&mode=login&returnTo=${returnTo}`)}
                         >
                             Login to ShelfMerch
                         </Button>
                         <Button
                             variant="outline"
                             className="w-full"
-                            onClick={() => navigate(`/auth?mode=signup&returnTo=${returnUrl}`)}
+                            onClick={() => navigate(`${authBase}&mode=signup&returnTo=${returnTo}`)}
                         >
                             Sign up for ShelfMerch
                         </Button>
