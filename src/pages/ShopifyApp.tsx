@@ -51,25 +51,39 @@ const ShopifyApp: React.FC = () => {
                     console.log('[ShopifyApp] Not installed, redirecting to OAuth');
                     if (status.authUrl) {
                         const host = searchParams.get('host');
+                        const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY;
                         const isEmbedded = searchParams.get('embedded') === '1' || !!host;
                         
-                        if (isEmbedded && host) {
+                        console.log('[ShopifyApp] Redirect context:', { isEmbedded, hasHost: !!host, hasApiKey: !!apiKey });
+                        
+                        if (isEmbedded && host && apiKey) {
                             // Use App Bridge Redirect for embedded context
                             try {
                                 const app = createApp({
-                                    apiKey: import.meta.env.VITE_SHOPIFY_API_KEY,
+                                    apiKey: apiKey,
                                     host: host,
                                     forceRedirect: true,
                                 });
                                 const redirect = Redirect.create(app);
                                 redirect.dispatch(Redirect.Action.REMOTE, status.authUrl);
+                                console.log('[ShopifyApp] App Bridge redirect dispatched');
                             } catch (err) {
-                                console.error('[ShopifyApp] App Bridge redirect failed, falling back:', err);
-                                window.location.assign(status.authUrl);
+                                console.error('[ShopifyApp] App Bridge redirect failed:', err);
+                                // Fallback: Use window.top for top-level redirect
+                                if (window.top && window.top !== window.self) {
+                                    window.top.location.href = status.authUrl;
+                                } else {
+                                    window.location.assign(status.authUrl);
+                                }
                             }
                         } else {
-                            // Not embedded, use normal redirect
-                            window.location.assign(status.authUrl);
+                            // Not embedded OR missing apiKey → use window.top fallback
+                            console.log('[ShopifyApp] Using window.top fallback');
+                            if (window.top && window.top !== window.self) {
+                                window.top.location.href = status.authUrl;
+                            } else {
+                                window.location.assign(status.authUrl);
+                            }
                         }
                     }
                     return; // Don't update state, page will navigate away
