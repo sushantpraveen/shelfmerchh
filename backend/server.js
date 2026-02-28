@@ -88,7 +88,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      frameAncestors: ["'self'", "https://admin.shopify.com", "https://*.myshopify.com"],
+      "frame-ancestors": ["'self'", "https://admin.shopify.com", "https://*.myshopify.com"],
     },
   },
   crossOriginEmbedderPolicy: false,

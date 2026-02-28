@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import createApp from '@shopify/app-bridge';
+import { Redirect } from '@shopify/app-bridge/actions';
 
 /**
  * ShopifyApp Component (Embedded Page)
@@ -48,7 +50,27 @@ const ShopifyApp: React.FC = () => {
                     // Not installed → redirect to OAuth (must be top-level for Shopify)
                     console.log('[ShopifyApp] Not installed, redirecting to OAuth');
                     if (status.authUrl) {
-                        window.location.assign(status.authUrl);
+                        const host = searchParams.get('host');
+                        const isEmbedded = searchParams.get('embedded') === '1' || !!host;
+                        
+                        if (isEmbedded && host) {
+                            // Use App Bridge Redirect for embedded context
+                            try {
+                                const app = createApp({
+                                    apiKey: import.meta.env.VITE_SHOPIFY_API_KEY,
+                                    host: host,
+                                    forceRedirect: true,
+                                });
+                                const redirect = Redirect.create(app);
+                                redirect.dispatch(Redirect.Action.REMOTE, status.authUrl);
+                            } catch (err) {
+                                console.error('[ShopifyApp] App Bridge redirect failed, falling back:', err);
+                                window.location.assign(status.authUrl);
+                            }
+                        } else {
+                            // Not embedded, use normal redirect
+                            window.location.assign(status.authUrl);
+                        }
                     }
                     return; // Don't update state, page will navigate away
                 }
